@@ -1,0 +1,16 @@
+*.py[co]
+**~
+*.rej
+*.orig
+*.sw[po]
+*.undo
+.DS_Store
+.mypy_cache
+
+# Ignore tags and editor-related files.
+GPATH
+GRTAGS
+GTAGS
+TAGS
+cscope.out
+tags
