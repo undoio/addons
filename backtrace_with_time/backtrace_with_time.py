@@ -1,6 +1,9 @@
 '''
-Annotates backtrace with time (basic block counts).
+Adds a ubt command which adds basic block counts to frames within a backtrace.
    Usage: ubt
+
+Contributers: Isa Smith, Toby Lloyd Davies
+Copyright (C) 2019 Undo Ltd
 '''
 
 
