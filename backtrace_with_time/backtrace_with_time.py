@@ -15,7 +15,8 @@ class BacktraceWithTime(gdb.Command):
     def __init__(self):
         super(BacktraceWithTime, self).__init__("ubt", gdb.COMMAND_USER)
 
-    def invoke(self, arg, from_tty):
+    @staticmethod
+    def invoke(arg, from_tty):
 
         # Get current time, so we can go back to it afterwards.
         original_time = udb.time.get()
