@@ -34,17 +34,21 @@ class BacktraceWithTime(gdb.Command):
         backtrace = gdb.execute('where', to_string=True)
         backtrace = backtrace.splitlines()
 
+        exception_hit = False
         for line in backtrace:
-            # Print time at start of each backtrace line.
-            time = udb.time.get()
-            print('[{}]\t{}'.format(str(time.bbcount), line))
-            try:
-                # Go back to previous frame
-                gdb.execute('rf', to_string=True)
-            except gdb.error:
-                # Can't figure out any further - perhaps stack frame is
-                # not available, or we have reached the start.
-                continue
+            if not exception_hit:
+                # Print time at start of each backtrace line.
+                time = udb.time.get()
+                print('[{}]\t{}'.format(str(time.bbcount), line))
+                try:
+                    # Go back to previous frame
+                    gdb.execute('rf', to_string=True)
+                except gdb.error:
+                    # Can't figure out any further - perhaps stack frame is
+                    # not available, or we have reached the start.
+                    exception_hit = True
+            else:
+                print('[?]\t{}'.format(line))
 
         # Go back to original time.
         udb.time.goto(original_time)
