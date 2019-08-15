@@ -40,8 +40,8 @@ class BacktraceWithTime(gdb.Command):
             print('[{}]\t{}'.format(str(time.bbcount), line))
             try:
                 # Go back to previous frame
-                gdb.execute("rf", to_string=True)
-            except:
+                gdb.execute('rf', to_string=True)
+            except gdb.error:
                 # Can't figure out any further - perhaps stack frame is
                 # not available, or we have reached the start.
                 break
