@@ -24,10 +24,12 @@ class BacktraceWithTime(gdb.Command):
 
         # Disable all breakpoints, so we can reverse up the stack without
         # hitting anything we shouldn't.
-        breakpoints = gdb.breakpoints()
-        if breakpoints != None:
-            for bp in breakpoints:
+        breakpoints_disabled = []
+        for bp in gdb.breakpoints():
+            if bp.enabled:
+                breakpoints_disabled.append(bp)
                 bp.enabled = False
+
         # Get the whole backtrace.
         backtrace = gdb.execute('where', to_string=True)
         backtrace = backtrace.splitlines()
@@ -48,9 +50,8 @@ class BacktraceWithTime(gdb.Command):
         udb.time.goto(original_time)
 
         # Finally, re enable breakpoints.
-        if breakpoints != None:
-            for bp in breakpoints:
-                bp.enabled = True
+        for bp in breakpoints_disabled:
+            bp.enabled = True
 
 
 BacktraceWithTime()
