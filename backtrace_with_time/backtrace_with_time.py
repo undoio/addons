@@ -14,7 +14,7 @@ from undodb.debugger_extensions import udb
 
 class BacktraceWithTime(gdb.Command):
     def __init__(self):
-        super(BacktraceWithTime, self).__init__("ubt", gdb.COMMAND_USER)
+        super(BacktraceWithTime, self).__init__('ubt', gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
@@ -29,7 +29,7 @@ class BacktraceWithTime(gdb.Command):
             for bp in breakpoints:
                 bp.enabled = False
         # Get the whole backtrace.
-        backtrace = gdb.execute("where", to_string=True)
+        backtrace = gdb.execute('where', to_string=True)
         backtrace = backtrace.splitlines()
 
         for line in backtrace:
