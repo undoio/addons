@@ -1,0 +1,62 @@
+#!/bin/bash
+_udb () {
+  if [[ $2 = --* ]]; then
+    COMPREPLY=( $( compgen -W ' 
+                   --undodb-defer-recording
+                   --undodb-keyserver-name
+                   --undodb-unoptimized-syscalls-mode
+                   --undodb-snapshots
+                   --undodb-event-log-max
+                   --undodb-event-log-mode
+                   --undodb-gdb-exe
+                   --undodb-event-log-block-size
+                   --undodb-heapsize
+                   --undodb-instr-heapsize
+                   --undodb-instr-reclaim
+                   --undodb-instr-free-list
+                   --undodb-instr-hash-shift
+                   --undodb-autotrace
+                   --undodb-autotrace-terminal
+                   --undodb-autorun
+		   --undodb-load-goto-end
+                   --undodb-nocheck-gdb
+                   --undodb-checkupdates
+                   --undodb-server-exe
+                   --undodb-errorbacktrace
+                   --undodb-defer-gdbinit
+                   --undodb-sigint
+                   --undodb-tmpdir-root
+                   --undodb-load
+                   --undodb-simulate-rdtsc
+                   --undodb-simulate-rdtsc-rdtscp
+                   --undodb-simulate-lsl
+                   --undodb-enable-async-io
+                   --undodb-async-io-preload-path
+                   --undodb-addr2line-exe 
+		   --undodb-lr-server-filename
+		   --undodb-lr-nanny-filename
+		   --undodb-lr-gdb-filename
+                   
+                   --help
+                   
+                   ' -- "$2" ) )
+  elif [[ $3 = --* ]]; then
+    case $3 in
+      --undodb-event-log-mode) COMPREPLY=( $(compgen -W 'straight circular' -- "$2") );;
+      --undodb-autotrace-terminal) COMPREPLY=( $(compgen -W 'xterm screen none' -- "$2") );;
+      --undodb-checkupdates) COMPREPLY=( $(compgen -W 'yes auto no never ask' -- "$2") );;
+      --undodb-enable-async-io) COMPREPLY=( $(compgen -W 'yes auto no' -- "$2") );;
+      --undodb-tmpdir-root) COMPREPLY=( $(compgen -d -- "$2") );;
+      --undodb-lr-server-filename|\
+      --undodb-lr-nanny-filename|\
+      --undodb-lr-gdb-filename|\
+      --undodb-addr2line-exe|\
+      --undodb-server-exe|\
+      --undodb-async-io-preload-path|\
+      --undodb-load|\
+      --undodb-gdb-exe) COMPREPLY=( $(compgen -f -- "$2" ) );;
+    esac
+  fi
+}
+
+complete -o filenames -F _udb -o default udb
