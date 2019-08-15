@@ -44,7 +44,7 @@ class BacktraceWithTime(gdb.Command):
             except gdb.error:
                 # Can't figure out any further - perhaps stack frame is
                 # not available, or we have reached the start.
-                break
+                continue
 
         # Go back to original time.
         udb.time.goto(original_time)
