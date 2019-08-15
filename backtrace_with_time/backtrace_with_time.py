@@ -7,6 +7,7 @@ Copyright (C) 2019 Undo Ltd
 '''
 
 
+from __future__ import print_function
 import gdb
 from undodb.debugger_extensions import udb
 
@@ -34,7 +35,7 @@ class BacktraceWithTime(gdb.Command):
         for line in backtrace:
             # Print time at start of each backtrace line.
             time = udb.time.get()
-            print '[{}]\t{}'.format(str(time.bbcount), line)
+            print('[{}]\t{}'.format(str(time.bbcount), line))
             try:
                 # Go back to previous frame
                 gdb.execute("rf", to_string=True)
