@@ -1,3 +1,5 @@
+[![Build status](https://api.travis-ci.org/barisione/addons.svg?master)](https://travis-ci.org/barisione/addons)
+
 UDB Addons
 ==========
 
