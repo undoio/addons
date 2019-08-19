@@ -6,11 +6,10 @@ Contributors: Mark Willamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
+from __future__ import absolute_import, print_function
 import tempfile
 import re
 import gdb
-from future import print_function
-
 
 # Pattern to parse map.
 begin_pattern = re.compile(r'''(?P<begin>[0-9a-fA-F]+)-(?P<end>[0-9a-fA-F]+)\s+([rwxps-]+)
