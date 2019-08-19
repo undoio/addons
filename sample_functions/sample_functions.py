@@ -50,7 +50,7 @@ class SampleFunctions(gdb.Command):
 
         current_bbcount = start_bbcount
 
-        function_p = re.compile('#0  0x[0-9a-f]+ in (\w+) .*')
+        function_p = re.compile(r'#0  0x[0-9a-f]+ in (\w+) .*')
 
         while current_bbcount <= end_bbcount:
             udb.time.goto(current_bbcount)
@@ -61,8 +61,6 @@ class SampleFunctions(gdb.Command):
 
             line = backtrace[0]
 
-            # Line should be like:
-            #0  0x00007f0fc6ecc2b0 in fprintf () from /lib/x86_64-linux-gnu/libc.so.6
             m = function_p.match(line)
 
             # Update current bbcount
@@ -77,8 +75,8 @@ class SampleFunctions(gdb.Command):
         # Go back to original time.
         udb.time.goto(original_time)
 
-                # Now print what we've found...
-        for function in functions.iterkeys():
+        # Now print what we've found...
+        for function in functions:
             print('{} {}'.format(function, str(functions[function])))
 
 
