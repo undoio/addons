@@ -2,7 +2,7 @@ Sample functions
 ================
 
 Sampler which counts the number of times we find ourselves in a particular function. 
-Outputs a list of functions and with their counts.
+Outputs a list of functions with their counts.
 	
 	Usage: 
 	  usample <start_bbcount> <end_bbcount> <bbcount_interval> 
