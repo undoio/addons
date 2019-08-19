@@ -7,7 +7,19 @@ try:
 except ImportError:
     pass
 
-from typing import *
+from typing import (
+    Optional,
+    NewType,
+    Iterable,
+    Tuple,
+    Any,
+    Union,
+    Protocol,
+    Text,
+    Callable,
+    List,
+    Generator,
+    ) 
 
 
 if sys.version_info[0] > 2:
@@ -262,7 +274,7 @@ class Symbol(object):
     is_variable: bool
 
     def is_valid(self) -> bool: ...
-    def value(self, frame: Frame = ...) -> gdb.Value: ...
+    def value(self, frame: Frame = ...) -> Value: ...
 
 
 class Frame(object):
