@@ -5,7 +5,9 @@ Copyright (C) 2019 Undo Ltd
 '''
 
 from __future__ import absolute_import, print_function
+
 import gdb
+
 from undodb.debugger_extensions import udb
 
 
