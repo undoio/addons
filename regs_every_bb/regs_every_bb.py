@@ -1,6 +1,6 @@
 '''
 Prints the registers, at every basic block within a range
-Contibutors: Toby LLoyd Davies
+Contibutors:  Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
@@ -35,7 +35,7 @@ class RegsEveryBB(gdb.Command):
             udb.time.goto(current_bbcount)
             print('{}:'.format(current_bbcount))
             gdb.execute('info reg')
-            print('\n')
+            print()
             current_bbcount += 1
 
         # Go back to original time.
