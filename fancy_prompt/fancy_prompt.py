@@ -4,15 +4,16 @@ Contributors: Mark Williamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
+from __future__ import absolute_import, division
 import re
 import datetime
-
-import gdb
 from undodb.debugger_extensions import udb
+import gdb
 
 
 # Configuration variable: apply colour to output?  Disable for TUI mode.
 colour_enabled = False
+
 
 class PromptColour(gdb.Command):
     '''
@@ -23,8 +24,10 @@ class PromptColour(gdb.Command):
     Arguments:
         SETTING - on|off to enable / disable colors.
     '''
+
     def __init__(self):
         super(PromptColour, self).__init__('prompt-color', gdb.COMMAND_SUPPORT)
+
     @staticmethod
     def invoke(argument, from_tty):
         global colour_enabled
@@ -32,7 +35,10 @@ class PromptColour(gdb.Command):
             colour_enabled = True
         elif argument == 'off':
             colour_enabled = False
+
+
 PromptColour()
+
 
 def undodb_get_extent():
     '''
@@ -45,6 +51,7 @@ def undodb_get_extent():
         return None
     return udb.get_event_log_extent()
 
+
 STATE_NONE = 'not running'
 STATE_DEFER = 'deferred'
 STATE_RECORD = 'record'
@@ -55,6 +62,7 @@ RE_MODE_RECORD = re.compile('UndoDB is in record mode')
 RE_MODE_REPLAY = re.compile('UndoDB is in replay mode')
 RE_MODE_REPLAY_LOADED = re.compile('UndoDB is replaying a loaded recording')
 RE_MODE_DEFERRED = re.compile('UndoDB is in deferred-recording mode')
+
 
 def undodb_get_state():
     '''
@@ -82,6 +90,7 @@ def undodb_get_state():
 
     raise RuntimeError('dont know about {}'.format(mode))
 
+
 def undodb_get_time():
     '''
     Get the current UndoDB debuggee time.
@@ -94,6 +103,7 @@ def undodb_get_time():
 
     return udb.time.get()
 
+
 TERM_BRIGHT_WHITE = r'\[\033[1m\]'
 TERM_BRIGHT_YELLOW = r'\[\033[1;33m\]'
 TERM_BRIGHT_GREEN = r'\[\033[1;32m\]'
@@ -103,6 +113,7 @@ TERM_MAGENTA = r'\[\033[35m\]'
 TERM_CYAN = r'\[\033[36m\]'
 TERM_RESET = r'\[\033[m\]'
 
+
 def term_colour(c, msg):
     '''
     Apply terminal colour codes to a string, if enabled.
@@ -111,6 +122,7 @@ def term_colour(c, msg):
         return c + msg + TERM_RESET
     else:
         return msg
+
 
 def prompt_state():
     '''
@@ -126,12 +138,14 @@ def prompt_state():
     else:
         return term_colour(TERM_BRIGHT_RED, '[*rec]')
 
+
 def prompt_time():
     '''
     Return a formatted string indicating the current wall-clock time.
     '''
     time_str = datetime.datetime.now().strftime('%H:%M:%S')
     return term_colour(TERM_BRIGHT_BLUE, '[' + time_str + ']')
+
 
 def prompt_progress():
     '''
@@ -144,6 +158,7 @@ def prompt_progress():
     bb_now = undodb_get_time().bbcount
     perc = 100 * float(bb_now - bb_start) / (bb_end - bb_start)
     return term_colour(TERM_CYAN, '[{:3.0f}%]'.format(perc))
+
 
 def prompt_bbcount():
     '''
