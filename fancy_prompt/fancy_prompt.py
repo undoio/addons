@@ -5,10 +5,12 @@ Copyright (C) 2019 Undo Ltd
 '''
 
 from __future__ import absolute_import, division
+
 import re
 import datetime
-from undodb.debugger_extensions import udb
 import gdb
+
+from undodb.debugger_extensions import udb
 
 
 # Configuration variable: apply colour to output?  Disable for TUI mode.
