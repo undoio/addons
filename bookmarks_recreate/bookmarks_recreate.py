@@ -11,8 +11,10 @@ Copyright (C) 2019 Undo Ltd
 '''
 
 from __future__ import absolute_import, with_statement, print_function
+
 import re
 import gdb
+
 from undodb.debugger_extensions import udb, RecordingTime
 
 
