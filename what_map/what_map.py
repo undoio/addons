@@ -7,6 +7,7 @@ Copyright (C) 2019 Undo Ltd
 '''
 
 from __future__ import absolute_import, print_function
+
 import tempfile
 import re
 import gdb
