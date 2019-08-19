@@ -14,9 +14,12 @@ Copyright (C) 2019 Undo Ltd
 
 
 from __future__ import absolute_import, division, print_function
+
 import re
 from collections import defaultdict
+
 import gdb
+
 from undodb.debugger_extensions import udb
 
 
