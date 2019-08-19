@@ -37,6 +37,7 @@ class PromptColour(gdb.Command):
             colour_enabled = True
         elif argument == 'off':
             colour_enabled = False
+        raise ValueError
 
 
 PromptColour()
