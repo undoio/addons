@@ -168,7 +168,6 @@ def prompt_bbcount():
     bbcount_str = str(t.bbcount) if t is not None else '?'
     return term_colour(TERM_MAGENTA, '@' + bbcount_str)
 
-BASE_PROMPT = '(udb %s) '
 
 def prompt_hook(current_prompt):
     '''
@@ -183,10 +182,7 @@ def prompt_hook(current_prompt):
     prompt_extra = ' '.join(fn() for fn in prompt_components)
 
     # Interpolate extra components into our base prompt string.
-    prompt = BASE_PROMPT % prompt_extra
-
-    # Set GDB to actually use the updated prompt string.
-    gdb.execute('set prompt {}'.format(gdb.prompt.substitute_prompt(prompt)))
+    return '(udb {})'.format(prompt_extra)
 
 
 # Set GDB to call our hook before each display of the prompt.
