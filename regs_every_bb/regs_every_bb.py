@@ -4,9 +4,10 @@ Contibutors: Toby LLoyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 import gdb
 from undodb.debugger_extensions import udb
+
 
 class RegsEveryBB(gdb.Command):
     def __init__(self):
