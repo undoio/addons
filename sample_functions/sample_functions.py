@@ -57,7 +57,7 @@ class SampleFunctions(gdb.Command):
         print_address = gdb.parameter('print address')
         gdb.execute('set print address off', to_string=True)
 
-        for current_bbcount in range(start_bbcount, end_bbcount+1, interval):
+        for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
             udb.time.goto(current_bbcount)
 
             # Get innermost frame of backtrace
