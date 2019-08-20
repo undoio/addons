@@ -51,29 +51,28 @@ class SampleFunctions(gdb.Command):
         end_bbcount = int(args[1])
         interval = int(args[2])
 
-        current_bbcount = start_bbcount
+        function_p = re.compile(r'#0  ([^\s]+) \(.*\) (at|from) .*')
 
-        function_p = re.compile(r'#0  0x[0-9a-f]+ in (\w+) .*')
+        # Save print address value so that we can restore it
+        print_address = gdb.parameter('print address')
+        gdb.execute('set print address off', to_string=True)
 
-        while current_bbcount <= end_bbcount:
+        for current_bbcount in range(start_bbcount, end_bbcount+1, interval):
             udb.time.goto(current_bbcount)
 
-            # Get backtrace (including current function)
-            backtrace = gdb.execute('where', to_string=True)
-            backtrace = backtrace.splitlines()
-
-            line = backtrace[0]
-
+            # Get innermost frame of backtrace
+            line = gdb.execute('bt 1', to_string=True)
             m = function_p.match(line)
-
-            # Update current bbcount
-            current_bbcount = current_bbcount + interval
 
             if m is None:
                 continue
-            function = m.group(1)
 
+            function = m.group(1)
             functions[function] += 1
+
+        # Restore original value of print address
+        if print_address:
+            gdb.execute('set print address on', to_string=True)
 
         # Go back to original time.
         udb.time.goto(original_time)
