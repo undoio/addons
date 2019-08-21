@@ -13,9 +13,10 @@ import re
 import gdb
 
 # Pattern to parse map.
-begin_pattern = re.compile(r'''(?P<begin>[0-9a-fA-F]+)-(?P<end>[0-9a-fA-F]+)
-\s+([rwxps-]+)\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+):([0-9a-fA-F]+)\s+([0-9]+)[ ]*
-([^\n]*)''')
+begin_pattern = re.compile(
+    r'(?P<begin>[0-9a-fA-F]+)-(?P<end>[0-9a-fA-F]+)'
+    r'\s+([rwxps-]+)\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+):([0-9a-fA-F]+)\s+'
+    r'([0-9]+)[ ]*([^\n]*)')
 
 
 def fetch_maps_remote():
