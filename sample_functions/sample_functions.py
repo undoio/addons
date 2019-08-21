@@ -51,7 +51,7 @@ class SampleFunctions(gdb.Command):
         end_bbcount = int(args[1])
         interval = int(args[2])
 
-        function_p = re.compile(r'#0  ([^\s]+) \(.*\) (at|from) .*')
+        function_p = re.compile(r'#[0-9]+  ([^\s]+) \(.*\) (at|from) .*')
 
         # Save print address value so that we can restore it
         print_address = gdb.parameter('print address')
@@ -60,15 +60,17 @@ class SampleFunctions(gdb.Command):
         for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
             udb.time.goto(current_bbcount)
 
-            # Get innermost frame of backtrace
-            line = gdb.execute('bt 1', to_string=True)
-            m = function_p.match(line)
-
-            if m is None:
-                continue
-
-            function = m.group(1)
-            functions[function] += 1
+            backtrace = gdb.execute('bt', to_string=True).splitlines()
+            # Create list of functions in the backtrace
+            trace_functions = []
+            for line in reversed(backtrace):
+                m = function_p.match(line)
+                if m is None:
+                    continue
+                trace_functions.append(m.group(1))
+            # Concatenate functions in backtrace to create key
+            key = '->'.join(trace_functions)
+            functions[key] += 1
 
         # Restore original value of print address
         if print_address:
