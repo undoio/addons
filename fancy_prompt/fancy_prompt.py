@@ -185,7 +185,7 @@ def prompt_hook(current_prompt):
     prompt_extra = ' '.join(fn() for fn in prompt_components)
 
     # Interpolate extra components into our base prompt string.
-    return '(udb {})'.format(prompt_extra)
+    return '(udb {} )'.format(prompt_extra)
 
 
 # Set GDB to call our hook before each display of the prompt.
