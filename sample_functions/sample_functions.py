@@ -15,7 +15,6 @@ Copyright (C) 2019 Undo Ltd
 
 from __future__ import absolute_import, division, print_function
 
-import re
 from collections import defaultdict
 
 import gdb
@@ -50,8 +49,6 @@ class SampleFunctions(gdb.Command):
         start_bbcount = int(args[0])
         end_bbcount = int(args[1])
         interval = int(args[2])
-
-        function_p = re.compile(r'#[0-9]+  ([^\s]+) \(.*\) (at|from) .*')
 
         # Save print address value so that we can restore it
         print_address = gdb.parameter('print address')
