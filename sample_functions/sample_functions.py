@@ -60,7 +60,11 @@ class SampleFunctions(gdb.Command):
             # Create list of functions in the backtrace
             trace_functions = []
             while frame is not None:
-                trace_functions.append(frame.name())
+                if frame.name() is not None:
+                    trace_functions.append(frame.name())
+                else:
+                    # If no symbol for function use pc
+                    trace_functions.append(str(frame.pc()))
                 frame = frame.older()
             # Concatenate functions in backtrace to create key
             key = '->'.join(reversed(trace_functions))
