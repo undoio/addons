@@ -59,17 +59,14 @@ class SampleFunctions(gdb.Command):
 
         for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
             udb.time.goto(current_bbcount)
-
-            backtrace = gdb.execute('bt', to_string=True).splitlines()
+            frame = gdb.newest_frame()
             # Create list of functions in the backtrace
             trace_functions = []
-            for line in reversed(backtrace):
-                m = function_p.match(line)
-                if m is None:
-                    continue
-                trace_functions.append(m.group(1))
+            while frame is not None:
+                trace_functions.append(frame.name())
+                frame = frame.older()
             # Concatenate functions in backtrace to create key
-            key = '->'.join(trace_functions)
+            key = '->'.join(reversed(trace_functions))
             functions[key] += 1
 
         # Restore original value of print address
