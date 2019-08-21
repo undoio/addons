@@ -15,7 +15,6 @@ Copyright (C) 2019 Undo Ltd
 
 from __future__ import absolute_import, division, print_function
 
-import re
 from collections import defaultdict
 
 import gdb
@@ -51,29 +50,29 @@ class SampleFunctions(gdb.Command):
         end_bbcount = int(args[1])
         interval = int(args[2])
 
-        current_bbcount = start_bbcount
+        # Save print address value so that we can restore it
+        print_address = gdb.parameter('print address')
+        gdb.execute('set print address off', to_string=True)
 
-        function_p = re.compile(r'#0  0x[0-9a-f]+ in (\w+) .*')
-
-        while current_bbcount <= end_bbcount:
+        for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
             udb.time.goto(current_bbcount)
+            frame = gdb.newest_frame()
+            # Create list of functions in the backtrace
+            trace_functions = []
+            while frame is not None:
+                if frame.name() is not None:
+                    trace_functions.append(frame.name())
+                else:
+                    # If no symbol for function use pc
+                    trace_functions.append(str(frame.pc()))
+                frame = frame.older()
+            # Concatenate functions in backtrace to create key
+            key = '->'.join(reversed(trace_functions))
+            functions[key] += 1
 
-            # Get backtrace (including current function)
-            backtrace = gdb.execute('where', to_string=True)
-            backtrace = backtrace.splitlines()
-
-            line = backtrace[0]
-
-            m = function_p.match(line)
-
-            # Update current bbcount
-            current_bbcount = current_bbcount + interval
-
-            if m is None:
-                continue
-            function = m.group(1)
-
-            functions[function] += 1
+        # Restore original value of print address
+        if print_address:
+            gdb.execute('set print address on', to_string=True)
 
         # Go back to original time.
         udb.time.goto(original_time)
