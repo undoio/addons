@@ -1,4 +1,4 @@
-[![Build status](https://api.travis-ci.org/undoio/addons.svg?master)](https://travis-ci.org/undoio/addons)
+[![Build status](https://api.travis-ci.com/undoio/addons.svg?master)](https://travis-ci.com/undoio/addons)
 
 UDB Addons
 ==========
