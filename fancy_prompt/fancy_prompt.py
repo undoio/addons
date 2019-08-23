@@ -60,11 +60,11 @@ STATE_DEFER = 'deferred'
 STATE_RECORD = 'record'
 STATE_REPLAY = 'replay'
 
-RE_MODE_NOT_DEBUGGING = re.compile('UndoDB is not debugging an application')
-RE_MODE_RECORD = re.compile('UndoDB is in record mode')
-RE_MODE_REPLAY = re.compile('UndoDB is in replay mode')
-RE_MODE_REPLAY_LOADED = re.compile('UndoDB is replaying a loaded recording')
-RE_MODE_DEFERRED = re.compile('UndoDB is in deferred-recording mode')
+RE_MODE_NOT_DEBUGGING = re.compile(r'(udb: )?UndoDB is not debugging an application')
+RE_MODE_RECORD = re.compile(r'(udb: )?UndoDB is in record mode')
+RE_MODE_REPLAY = re.compile(r'(udb: )?UndoDB is in replay mode')
+RE_MODE_REPLAY_LOADED = re.compile('(udb: )?UndoDB is replaying a loaded recording')
+RE_MODE_DEFERRED = re.compile(r'(udb: )?UndoDB is in deferred-recording mode')
 
 
 def undodb_get_state():
@@ -91,7 +91,7 @@ def undodb_get_state():
     elif RE_MODE_DEFERRED.match(mode):
         return STATE_DEFER
 
-    raise RuntimeError('dont know about {}'.format(mode))
+    raise RuntimeError('Cannot get debuggee state. Dont know about {}'.format(mode))
 
 
 def undodb_get_time():
