@@ -13,6 +13,12 @@ function error_exit() {
     exit 1
 }
 
+function join() {
+    local IFS="$1"
+    shift
+    echo "$*"
+}
+
 failure_count=0
 total_count=0
 
@@ -74,21 +80,21 @@ error_or_success $?
 echo "== PYCODESTYLE == "
 
 pycodestyle_ignore=(
-    '--ignore=E123' # Closing bracket indentation. Checked by pylint.
-    '--ignore=E124' # Closing bracket not aligned. Pylint has different opinions.
-    '--ignore=E241' # Multiple spaces after colon. Allowed for dicts.
-    '--ignore=E261' # Two spaces before inline comment.
-    '--ignore=E266' # Too many "#". It's useful to define blocks of code.
-    '--ignore=E402' # Module level import not at the top. Checked by pylint.
-    '--ignore=E501' # Line too long. Checked by pylint.
-    '--ignore=E701' # Multiple statements in one line. Checked by pylint.
-    '--ignore=E722' # Bare except. Checked by pylint.
-    '--ignore=E731' # Do not assign lambda. Needed when defining argument to avoid a function redef error.
-    '--ignore=E741' # Ambiguous variable name. Pylint already checks for names.
-    '--ignore=W504' # Line break after binary operator. This is the recommended style (503 is the opposite).
+    'E123' # Closing bracket indentation. Checked by pylint.
+    'E124' # Closing bracket not aligned. Pylint has different opinions.
+    'E241' # Multiple spaces after colon. Allowed for dicts.
+    'E261' # Two spaces before inline comment.
+    'E266' # Too many "#". It's useful to define blocks of code.
+    'E402' # Module level import not at the top. Checked by pylint.
+    'E501' # Line too long. Checked by pylint.
+    'E701' # Multiple statements in one line. Checked by pylint.
+    'E722' # Bare except. Checked by pylint.
+    'E731' # Do not assign lambda. Needed when defining argument to avoid a function redef error.
+    'E741' # Ambiguous variable name. Pylint already checks for names.
+    'W504' # Line break after binary operator. This is the recommended style (503 is the opposite).
     )
 pycodestyle \
-    "${pycodestyle_ignore[@]}" \
+    --ignore="$(join "," "${pycodestyle_ignore[@]}")" \
     "${py_files[@]}"
 error_or_success $?
 
