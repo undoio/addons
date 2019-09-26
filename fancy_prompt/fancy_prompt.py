@@ -35,9 +35,11 @@ class PromptColour(gdb.Command):
         global colour_enabled
         if argument == 'on':
             colour_enabled = True
+            return
         elif argument == 'off':
             colour_enabled = False
-        raise ValueError
+        else:
+            raise ValueError
 
 
 PromptColour()
