@@ -37,7 +37,8 @@ class PromptColour(gdb.Command):
             colour_enabled = True
         elif argument == 'off':
             colour_enabled = False
-        raise ValueError
+        else:
+            raise ValueError
 
 
 PromptColour()
@@ -107,14 +108,14 @@ def undodb_get_time():
     return udb.time.get()
 
 
-TERM_BRIGHT_WHITE = r'\[\033[1m\]'
-TERM_BRIGHT_YELLOW = r'\[\033[1;33m\]'
-TERM_BRIGHT_GREEN = r'\[\033[1;32m\]'
-TERM_BRIGHT_RED = r'\[\033[1;31m\]'
-TERM_BRIGHT_BLUE = r'\[\033[1;34m\]'
-TERM_MAGENTA = r'\[\033[35m\]'
-TERM_CYAN = r'\[\033[36m\]'
-TERM_RESET = r'\[\033[m\]'
+TERM_BRIGHT_WHITE = '\\[\033[1m\\]'
+TERM_BRIGHT_YELLOW = '\\[\033[1;33m\\]'
+TERM_BRIGHT_GREEN = '\\[\033[1;32m\\]'
+TERM_BRIGHT_RED = '\\[\033[1;31m\\]'
+TERM_BRIGHT_BLUE = '\\[\033[1;34m\\]'
+TERM_MAGENTA = '\\[\033[35m\\]'
+TERM_CYAN = '\\[\033[36m\\]'
+TERM_RESET = '\\[\033[m\\]'
 
 
 def term_colour(c, msg):
@@ -185,7 +186,7 @@ def prompt_hook(current_prompt):
     prompt_extra = ' '.join(fn() for fn in prompt_components)
 
     # Interpolate extra components into our base prompt string.
-    return '(udb {}) '.format(prompt_extra)
+    return '(udb {}) '.format(gdb.prompt.substitute_prompt(prompt_extra))
 
 
 # Set GDB to call our hook before each display of the prompt.
