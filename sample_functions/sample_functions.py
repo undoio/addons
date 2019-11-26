@@ -19,7 +19,10 @@ from collections import defaultdict
 
 import gdb
 
-from undodb.debugger_extensions import udb
+from undodb.debugger_extensions import (
+    gdbutils,
+    udb,
+    )
 
 
 class SampleFunctions(gdb.Command):
@@ -52,7 +55,7 @@ class SampleFunctions(gdb.Command):
 
         # Save print address value so that we can restore it
         print_address = gdb.parameter('print address')
-        gdb.execute('set print address off', to_string=True)
+        gdbutils.execute_to_string('set print address off')
 
         for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
             udb.time.goto(current_bbcount)
@@ -72,7 +75,7 @@ class SampleFunctions(gdb.Command):
 
         # Restore original value of print address
         if print_address:
-            gdb.execute('set print address on', to_string=True)
+            gdbutils.execute_to_string('set print address on')
 
         # Go back to original time.
         udb.time.goto(original_time)

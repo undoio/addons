@@ -11,7 +11,10 @@ from __future__ import absolute_import, print_function
 
 import gdb
 
-from undodb.debugger_extensions import udb
+from undodb.debugger_extensions import (
+    gdbutils,
+    udb,
+    )
 
 
 class BacktraceWithTime(gdb.Command):
@@ -32,7 +35,7 @@ class BacktraceWithTime(gdb.Command):
                 bp.enabled = False
 
         # Get the whole backtrace.
-        backtrace = gdb.execute('where', to_string=True)
+        backtrace = gdbutils.execute_to_string('where')
         backtrace = backtrace.splitlines()
 
         exception_hit = False
@@ -43,7 +46,7 @@ class BacktraceWithTime(gdb.Command):
                 print('[{}]\t{}'.format(str(time.bbcount), line))
                 try:
                     # Go back to previous frame
-                    gdb.execute('rf', to_string=True)
+                    gdbutils.execute_to_string('rf')
                 except gdb.error:
                     # Can't figure out any further - perhaps stack frame is
                     # not available, or we have reached the start.

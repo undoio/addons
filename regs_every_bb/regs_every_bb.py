@@ -8,7 +8,10 @@ from __future__ import absolute_import, print_function
 
 import gdb
 
-from undodb.debugger_extensions import udb
+from undodb.debugger_extensions import (
+    gdbutils,
+    udb,
+    )
 
 
 class RegsEveryBB(gdb.Command):
@@ -45,7 +48,7 @@ class RegsEveryBB(gdb.Command):
 
         # Restore pagination
         if pagination:
-            gdb.execute('set pagination on', to_string=True)
+            gdbutils.execute_to_string('set pagination on')
 
 
 RegsEveryBB()

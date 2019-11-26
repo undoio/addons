@@ -15,7 +15,11 @@ from __future__ import absolute_import, with_statement, print_function
 import re
 import gdb
 
-from undodb.debugger_extensions import udb, RecordingTime
+from undodb.debugger_extensions import (
+    RecordingTime,
+    gdbutils,
+    udb,
+    )
 
 
 class BookmarksSave(gdb.Command):
@@ -25,7 +29,7 @@ class BookmarksSave(gdb.Command):
     @staticmethod
     def invoke(arg, from_tty):
         with open(arg, 'w') as f:
-            f.write(gdb.execute('uinfo bookmarks', to_string=True))
+            f.write(gdbutils.execute_to_string('uinfo bookmarks'))
 
 
 bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): ([0-9]+).*''')
@@ -49,7 +53,7 @@ class BookmarksRestore(gdb.Command):
                     pc = int(match.group(2), 16)
                     num = match.group(3)
                     udb.time.goto(RecordingTime(bbcount, pc))
-                    gdb.execute('ubookmark {}'.format(num), to_string=True)
+                    gdbutils.execute_to_string('ubookmark {}'.format(num))
 
         udb.time.goto(original_time)
 
