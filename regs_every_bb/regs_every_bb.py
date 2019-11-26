@@ -23,32 +23,24 @@ class RegsEveryBB(gdb.Command):
         # Get current time, so we can go back to it afterwards.
         original_time = udb.time.get()
 
-        # Save pagination state
-        pagination = gdb.parameter('pagination')
+        with gdbutils.temporary_parameter('pagination', False):
+            args = gdb.string_to_argv(arg)
 
-        gdb.execute('set pagination off')
+            start_bbcount = int(args[0])
+            end_bbcount = int(args[1])
 
-        args = gdb.string_to_argv(arg)
+            current_bbcount = start_bbcount
 
-        start_bbcount = int(args[0])
-        end_bbcount = int(args[1])
-
-        current_bbcount = start_bbcount
-
-        while current_bbcount <= end_bbcount:
-            # Print values of registers at each basic block in range
-            udb.time.goto(current_bbcount)
-            print('{}:'.format(current_bbcount))
-            gdb.execute('info reg')
-            print()
-            current_bbcount += 1
+            while current_bbcount <= end_bbcount:
+                # Print values of registers at each basic block in range
+                udb.time.goto(current_bbcount)
+                print('{}:'.format(current_bbcount))
+                gdb.execute('info reg')
+                print()
+                current_bbcount += 1
 
         # Go back to original time.
         udb.time.goto(original_time)
-
-        # Restore pagination
-        if pagination:
-            gdbutils.execute_to_string('set pagination on')
 
 
 RegsEveryBB()

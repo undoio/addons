@@ -53,29 +53,22 @@ class SampleFunctions(gdb.Command):
         end_bbcount = int(args[1])
         interval = int(args[2])
 
-        # Save print address value so that we can restore it
-        print_address = gdb.parameter('print address')
-        gdbutils.execute_to_string('set print address off')
-
-        for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
-            udb.time.goto(current_bbcount)
-            frame = gdb.newest_frame()
-            # Create list of functions in the backtrace
-            trace_functions = []
-            while frame is not None:
-                if frame.name() is not None:
-                    trace_functions.append(frame.name())
-                else:
-                    # If no symbol for function use pc
-                    trace_functions.append(str(frame.pc()))
-                frame = frame.older()
-            # Concatenate functions in backtrace to create key
-            key = '->'.join(reversed(trace_functions))
-            functions[key] += 1
-
-        # Restore original value of print address
-        if print_address:
-            gdbutils.execute_to_string('set print address on')
+        with gdbutils.temporary_parameter('print address', False):
+            for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
+                udb.time.goto(current_bbcount)
+                frame = gdb.newest_frame()
+                # Create list of functions in the backtrace
+                trace_functions = []
+                while frame is not None:
+                    if frame.name() is not None:
+                        trace_functions.append(frame.name())
+                    else:
+                        # If no symbol for function use pc
+                        trace_functions.append(str(frame.pc()))
+                    frame = frame.older()
+                # Concatenate functions in backtrace to create key
+                key = '->'.join(reversed(trace_functions))
+                functions[key] += 1
 
         # Go back to original time.
         udb.time.goto(original_time)
