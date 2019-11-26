@@ -30,3 +30,14 @@ Samples the number of times the program is in each function.
 
 [**What map**](what_map/README.md)  
 Looks up a variable or address within the maps of the debuggee.
+
+
+Development
+-----------
+
+Feel free to make a pull request against the project!
+
+The [`master`](https://github.com/undoio/addons/tree/dev) branch supports the
+latest release of UndoDB.
+The [`dev`](https://github.com/undoio/addons/tree/dev) branch contains code
+meant for the next future release of UndoDB.
