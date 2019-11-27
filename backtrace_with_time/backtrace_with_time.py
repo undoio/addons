@@ -23,15 +23,9 @@ class BacktraceWithTime(gdb.Command):
 
     @staticmethod
     def invoke(arg, from_tty):
-        with udb.time.auto_reverting():
-            # Disable all breakpoints, so we can reverse up the stack without
-            # hitting anything we shouldn't.
-            breakpoints_disabled = []
-            for bp in gdb.breakpoints():
-                if bp.enabled:
-                    breakpoints_disabled.append(bp)
-                    bp.enabled = False
-
+        # We disable all breakpoints, so we can reverse up the stack without
+        # hitting anything we shouldn't.
+        with udb.time.auto_reverting(), gdbutils.suspend_breakpoints():
             # Get the whole backtrace.
             backtrace = gdbutils.execute_to_string('where')
             backtrace = backtrace.splitlines()
@@ -51,10 +45,6 @@ class BacktraceWithTime(gdb.Command):
                         exception_hit = True
                 else:
                     print('[?]\t{}'.format(line))
-
-        # Finally, re enable breakpoints.
-        for bp in breakpoints_disabled:
-            bp.enabled = True
 
 
 BacktraceWithTime()
