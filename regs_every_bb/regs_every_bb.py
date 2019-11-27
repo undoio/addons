@@ -20,27 +20,22 @@ class RegsEveryBB(gdb.Command):
 
     @staticmethod
     def invoke(arg, from_tty):
-        # Get current time, so we can go back to it afterwards.
-        original_time = udb.time.get()
+        with udb.time.auto_reverting():
+            with gdbutils.temporary_parameter('pagination', False):
+                args = gdb.string_to_argv(arg)
 
-        with gdbutils.temporary_parameter('pagination', False):
-            args = gdb.string_to_argv(arg)
+                start_bbcount = int(args[0])
+                end_bbcount = int(args[1])
 
-            start_bbcount = int(args[0])
-            end_bbcount = int(args[1])
+                current_bbcount = start_bbcount
 
-            current_bbcount = start_bbcount
-
-            while current_bbcount <= end_bbcount:
-                # Print values of registers at each basic block in range
-                udb.time.goto(current_bbcount)
-                print('{}:'.format(current_bbcount))
-                gdb.execute('info reg')
-                print()
-                current_bbcount += 1
-
-        # Go back to original time.
-        udb.time.goto(original_time)
+                while current_bbcount <= end_bbcount:
+                    # Print values of registers at each basic block in range
+                    udb.time.goto(current_bbcount)
+                    print('{}:'.format(current_bbcount))
+                    gdb.execute('info reg')
+                    print()
+                    current_bbcount += 1
 
 
 RegsEveryBB()
