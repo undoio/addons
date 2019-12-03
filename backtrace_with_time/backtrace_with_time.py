@@ -11,7 +11,10 @@ from __future__ import absolute_import, print_function
 
 import gdb
 
-from undodb.debugger_extensions import udb
+from undodb.debugger_extensions import (
+    gdbutils,
+    udb,
+    )
 
 
 class BacktraceWithTime(gdb.Command):
@@ -20,43 +23,28 @@ class BacktraceWithTime(gdb.Command):
 
     @staticmethod
     def invoke(arg, from_tty):
-        # Get current time, so we can go back to it afterwards.
-        original_time = udb.time.get()
-
-        # Disable all breakpoints, so we can reverse up the stack without
+        # We disable all breakpoints, so we can reverse up the stack without
         # hitting anything we shouldn't.
-        breakpoints_disabled = []
-        for bp in gdb.breakpoints():
-            if bp.enabled:
-                breakpoints_disabled.append(bp)
-                bp.enabled = False
+        with udb.time.auto_reverting(), gdbutils.suspend_breakpoints():
+            # Get the whole backtrace.
+            backtrace = gdbutils.execute_to_string('where')
+            backtrace = backtrace.splitlines()
 
-        # Get the whole backtrace.
-        backtrace = gdb.execute('where', to_string=True)
-        backtrace = backtrace.splitlines()
-
-        exception_hit = False
-        for line in backtrace:
-            if not exception_hit:
-                # Print time at start of each backtrace line.
-                time = udb.time.get()
-                print('[{}]\t{}'.format(str(time.bbcount), line))
-                try:
-                    # Go back to previous frame
-                    gdb.execute('rf', to_string=True)
-                except gdb.error:
-                    # Can't figure out any further - perhaps stack frame is
-                    # not available, or we have reached the start.
-                    exception_hit = True
-            else:
-                print('[?]\t{}'.format(line))
-
-        # Go back to original time.
-        udb.time.goto(original_time)
-
-        # Finally, re enable breakpoints.
-        for bp in breakpoints_disabled:
-            bp.enabled = True
+            exception_hit = False
+            for line in backtrace:
+                if not exception_hit:
+                    # Print time at start of each backtrace line.
+                    time = udb.time.get()
+                    print('[{}]\t{}'.format(str(time.bbcount), line))
+                    try:
+                        # Go back to previous frame
+                        gdbutils.execute_to_string('rf')
+                    except gdb.error:
+                        # Can't figure out any further - perhaps stack frame is
+                        # not available, or we have reached the start.
+                        exception_hit = True
+                else:
+                    print('[?]\t{}'.format(line))
 
 
 BacktraceWithTime()

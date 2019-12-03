@@ -8,7 +8,10 @@ from __future__ import absolute_import, print_function
 
 import gdb
 
-from undodb.debugger_extensions import udb
+from undodb.debugger_extensions import (
+    gdbutils,
+    udb,
+    )
 
 
 class RegsEveryBB(gdb.Command):
@@ -17,35 +20,22 @@ class RegsEveryBB(gdb.Command):
 
     @staticmethod
     def invoke(arg, from_tty):
-        # Get current time, so we can go back to it afterwards.
-        original_time = udb.time.get()
+        with udb.time.auto_reverting():
+            with gdbutils.temporary_parameter('pagination', False):
+                args = gdb.string_to_argv(arg)
 
-        # Save pagination state
-        pagination = gdb.parameter('pagination')
+                start_bbcount = int(args[0])
+                end_bbcount = int(args[1])
 
-        gdb.execute('set pagination off')
+                current_bbcount = start_bbcount
 
-        args = gdb.string_to_argv(arg)
-
-        start_bbcount = int(args[0])
-        end_bbcount = int(args[1])
-
-        current_bbcount = start_bbcount
-
-        while current_bbcount <= end_bbcount:
-            # Print values of registers at each basic block in range
-            udb.time.goto(current_bbcount)
-            print('{}:'.format(current_bbcount))
-            gdb.execute('info reg')
-            print()
-            current_bbcount += 1
-
-        # Go back to original time.
-        udb.time.goto(original_time)
-
-        # Restore pagination
-        if pagination:
-            gdb.execute('set pagination on', to_string=True)
+                while current_bbcount <= end_bbcount:
+                    # Print values of registers at each basic block in range
+                    udb.time.goto(current_bbcount)
+                    print('{}:'.format(current_bbcount))
+                    gdb.execute('info reg')
+                    print()
+                    current_bbcount += 1
 
 
 RegsEveryBB()
