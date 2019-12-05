@@ -159,8 +159,11 @@ def prompt_progress():
     if extent is None:
         return term_colour(TERM_CYAN, '[---%]')
     bb_start, bb_end = extent
+    extent_time = bb_end - bb_start
+    if extent_time == 0:
+        return term_colour(TERM_CYAN, '[0%]')
     bb_now = undodb_get_time().bbcount
-    perc = 100 * float(bb_now - bb_start) / (bb_end - bb_start)
+    perc = 100 * float(bb_now - bb_start) / extent_time
     return term_colour(TERM_CYAN, '[{:3.0f}%]'.format(perc))
 
 
