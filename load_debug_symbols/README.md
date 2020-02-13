@@ -9,7 +9,7 @@ the .debug file being present.
 When we produce a recording of an application that has been generated on binaries stripped
 of symbols, the resulting recording file will also not contain debug symbols. In order to
 retrospectively add the debug symbols to the recording, the user is required to use the
-`add-symbol-file` command in udb and pass in the .debug file and relevant addresses for the
+`add-symbol-file` command in udb and pass in the `.debug` file and relevant addresses for the
 `.text`, `.data` and `.bss` sections. This script automates this process.
 
 Usage: `load-debug-symbols PATHTOFILE`
