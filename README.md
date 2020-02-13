@@ -31,6 +31,8 @@ Samples the number of times the program is in each function.
 [**What map**](what_map/README.md)  
 Looks up a variable or address within the maps of the debuggee.
 
+[**Load Debug Symbols**](load_debug_symbols/README.md)
+Loads debug symbols by parsing the relevant section addresses.
 
 Development
 -----------
