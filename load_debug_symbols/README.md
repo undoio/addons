@@ -1,12 +1,21 @@
 Load Debug Symbols
 ==================
 
-Loads a debug symbol file at the right addresses for .text, .data and .bss sections.
+A common practice amongst customers is to produce binaries compiled with debug symbols and
+then use a tool such as `objcopy` to strip it of symbols, producing a `.debug` symbol file
+and a stripped binary. This stripped binary is then shipped as part of their product without
+the .debug file being present.
 
-Usage: load-debug-symbols PATHTOFILE
+When we produce a recording of an application that has been generated on binaries stripped
+of symbols, the resulting recording file will also not contain debug symbols. In order to
+retrospectively add the debug symbols to the recording, the user is required to use the
+`add-symbol-file` command in udb and pass in the .debug file and relevant addresses for the
+`.text`, `.data` and `.bss` sections. This script automates this process.
+
+Usage: `load-debug-symbols PATHTOFILE`
 
 Examples:
-load-debug-symbols /foo/bar/baz.debug - Loads the debug symbols by parsing relevant sections.
+`load-debug-symbols /foo/bar/baz.debug` - Loads the debug symbols by parsing relevant sections.
 
-Note that the argument to "load-debug-symbols" needs to be a valid debug symbol file and
+Note that the argument to `load-debug-symbols` needs to be a valid debug symbol file and
 present in the file system.
