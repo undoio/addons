@@ -20,7 +20,7 @@ from collections import defaultdict
 import gdb
 
 from undodb.debugger_extensions import (
-    gdbutils,
+    debugger_utils,
     udb,
     )
 
@@ -50,7 +50,7 @@ class SampleFunctions(gdb.Command):
             end_bbcount = int(args[1])
             interval = int(args[2])
 
-            with gdbutils.temporary_parameter('print address', False):
+            with debugger_utils.temporary_parameter('print address', False):
                 for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
                     udb.time.goto(current_bbcount)
                     frame = gdb.newest_frame()
