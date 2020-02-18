@@ -1,16 +1,16 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 
 import re
 import subprocess
-from subprocess import Popen, PIPE
+from subprocess import PIPE
 import datetime
-import random
 from collections import namedtuple
-import traceback
+import six
 
 import gdb
 
 PROFILING = False
+
 
 def parse_raw_symlist(syml):
     symre = r'[0-9 ]+\s[\w]\s(.*)'
@@ -18,7 +18,7 @@ def parse_raw_symlist(syml):
     for line in syml.split('\n'):
         m = symc.search(line)
         if m:
-            yield(m.group(1))
+            yield m.group(1)
 
 
 def extract_symbol_list_from_so(file_name):
@@ -32,7 +32,6 @@ def extract_symbol_list_from_so(file_name):
     except OSError:
         print('no usable "nm" found, cannot continue')
         raise
-    #assert symlist, 'no symbols in file {}'.format(file_name)
     return symlist
 
 
@@ -49,7 +48,9 @@ def extract_symbols_from_raw_list(rs):
         parsed_list.append(sym_name)
     return ''.join(parsed_list)
 
+
 SOInfo = namedtuple('SOInfo', ['fullname', 'symbols', 'start', 'end', 'loaded'])
+
 
 def load_so_list():
     '''
@@ -68,11 +69,11 @@ def load_so_list():
             ea = m.group(2)
             if name not in sodict:
                 sodict[name] = SOInfo(
-                    fullname = so_path + '/' + name,
-                    symbols = {},
-                    start = sa,
-                    end = ea,
-                    loaded = False
+                    fullname=so_path + '/' + name,
+                    symbols={},
+                    start=sa,
+                    end=ea,
+                    loaded=False
                     )
             else:
                 # this shouldn't happen but we can just verify it is indeed the same library
@@ -84,6 +85,7 @@ def load_so_list():
                     .format(name, ea, sodict[name].end)
     return sodict
 
+
 class LoadLazySymbols(gdb.Command):
     '''
     A command to load a recording without loading
@@ -94,25 +96,26 @@ class LoadLazySymbols(gdb.Command):
         super(LoadLazySymbols, self).__init__('loadlazy', gdb.COMMAND_DATA, gdb.COMPLETE_FILENAME)
         self.rec = None
 
-
     def invoke(self, rec, from_tty):
-        try:
-            if rec == self.rec:
-                pass
-            else:
-                self.rec = rec
-                gdb.execute('set auto-solib-add off', to_string=True)
-                gdb.execute('uload {}'.format(rec))
-        except Exception:
-            traceback.print_exc()
+        if rec == self.rec:
+            pass
+        else:
+            self.rec = rec
+            gdb.execute('set auto-solib-add off', to_string=True)
+            gdb.execute('uload {}'.format(rec))
+
 
 def get_frame_name(pc):
     sodict = load_so_list()
+    loaded = False
     for name in sodict:
         sa = int(sodict[name].start, 16)
         ea = int(sodict[name].end, 16)
         if pc >= sa and pc < ea:
             gdb.execute('sharedlibrary {}'.format(name))
+            loaded = True
+    return loaded
+
 
 class PopulateBT(gdb.Command):
     '''
@@ -122,8 +125,8 @@ class PopulateBT(gdb.Command):
     def __init__(self):
         super(PopulateBT, self).__init__('popbt', gdb.COMPLETE_EXPRESSION)
 
-
-    def invoke(self, arg, from_tty):
+    @staticmethod
+    def invoke(arg, from_tty):
         curr_frame = gdb.newest_frame()
         frames_loaded = False
         while curr_frame:
@@ -131,8 +134,7 @@ class PopulateBT(gdb.Command):
                 # iteratively go through all frames and for each one check if the name is loaded.
                 # if not load the name
                 if not curr_frame.name():
-                    get_frame_name(curr_frame.pc())
-                    frames_loaded = True
+                    frames_loaded = get_frame_name(curr_frame.pc())
                 curr_frame = curr_frame.older()
             except gdb.error:
                 # restart as loading frames might change things ;)
@@ -144,47 +146,33 @@ class PopulateBT(gdb.Command):
                     frames_loaded = False
                 curr_frame = gdb.newest_frame()
 
+
 class ReverseStepSymbol(gdb.Command):
     '''
-    A command to find reverse step and find symbols for the current program counter
+    A command to perform reverse-step after having loaded the symbols for the target pc
     '''
 
     def __init__(self):
         super(ReverseStepSymbol, self).__init__('rss', gdb.COMPLETE_EXPRESSION)
 
-    def get_frame_name(self, pc):
-        sodict = load_so_list()
-        loaded = False
-        try:
-            for name in sodict:
-                sa = int(sodict[name].start, 16)
-                ea = int(sodict[name].end, 16)
-                if pc >= sa and pc < ea:
-                    gdb.execute('sharedlibrary {}'.format(name))
-                    print('found sharedlibrary', name)
-                    loaded = True
-            if not loaded:
-                print 'ERROR: shared library not found for address {pc}'
-        except gdb.error as e:
-            print('ERROR: gdb eror', e)
-
-    def invoke(self, arg, from_tty):
+    @staticmethod
+    def invoke(arg, from_tty):
         gdb.execute('rsi', to_string=True)  # hide the output
         # code to resolve the symbol at pc address
         curr_frame = gdb.newest_frame()
         if not curr_frame.name():
-            self.get_frame_name(curr_frame.pc())
-        try:
-            curr_frame = gdb.newest_frame()
-        except gdb.error as e:
-            print('ERROR:', e)
+            loaded = get_frame_name(curr_frame.pc())
+            if not loaded:
+                print('ERROR: shared library not found for address {:x}'.format(curr_frame.pc()))
+        curr_frame = gdb.newest_frame()
         # check symbol is now present
-        hex_pc = hex(curr_frame.pc())
         if not curr_frame.name():
-            print('WARNING: reverse step may be slow, no symbol found for PC {}'.format(hex_pc))
+            print('WARNING: reverse step may be slow, no symbol found for PC {:x}'
+                  .format(curr_frame.pc()))
         gdb.execute('si', to_string=True)  # hide the output
         time_gdb_execute('rs')
         gdb.execute('bt 1')
+
 
 class LoadLibFromSym(gdb.Command):
     '''
@@ -204,22 +192,19 @@ class LoadLibFromSym(gdb.Command):
                 print('Got a match: {} contains {}'.format(sym, symbol))
                 match = True
         if match:
-            ns = raw_input('load library [y]/n ? ') or 'y'
+            ns = six.moves.input('load library [y]/n ? ') or 'y'
             if ns != 'n':
                 gdb.execute('sharedlibrary {}'.format(so))
-
 
     def load_libs_with_name(self, symbol):
         for so in self.sodict:
             self.check_lib_for_symbol(so, symbol)
 
     def invoke(self, symbol, from_tty):
-        try:
-            if not self.sodict:
-                self.sodict = load_so_list()
-            self.load_libs_with_name(symbol)
-        except Exception:
-            traceback.print_exc()
+        if not self.sodict:
+            self.sodict = load_so_list()
+        self.load_libs_with_name(symbol)
+
 
 def time_gdb_execute(cmd):
     old_time = datetime.datetime.now()
@@ -228,6 +213,7 @@ def time_gdb_execute(cmd):
     delta = new_time - old_time
     if PROFILING:
         print('Duration: {} command: {}'.format(delta.total_seconds(), cmd))
+
 
 LoadLibFromSym()
 LoadLazySymbols()
