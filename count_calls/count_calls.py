@@ -5,7 +5,10 @@ from __future__ import absolute_import, division, print_function
 import sys
 import textwrap
 
-from undodb.udb_launcher import UdbLauncher
+from undodb.udb_launcher import (
+    REDIRECTION_COLLECT,
+    UdbLauncher,
+    )
 
 
 def main(argv):
@@ -24,9 +27,8 @@ def main(argv):
     launcher.add_extension('extension')
     # Tell the extension the function name.
     launcher.run_data['func_name'] = func_name
-    # Finally, launch UndoDB! (And hide the output, we don't want it on
-    # screen.)
-    res = launcher.run_debugger(redirect_output=True)
+    # Finally, launch UndoDB! (And hide the output, we don't want it on screen.)
+    res = launcher.run_debugger(redirect_debugger_output=REDIRECTION_COLLECT)
 
     if res.exit_code == 0:
         # All good.

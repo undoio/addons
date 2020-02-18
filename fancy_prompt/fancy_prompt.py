@@ -11,7 +11,7 @@ import datetime
 import gdb
 
 from undodb.debugger_extensions import (
-    gdbutils,
+    debugger_utils,
     udb,
     )
 
@@ -84,7 +84,7 @@ def undodb_get_state():
     '''
     # If we get here, there's an inferior.  Check whether we're using deferred
     # recording.
-    mode = gdbutils.execute_to_string('uinfo execution-mode')
+    mode = debugger_utils.execute_to_string('uinfo execution-mode')
 
     if RE_MODE_NOT_DEBUGGING.match(mode):
         return STATE_NONE

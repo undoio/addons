@@ -17,7 +17,7 @@ import gdb
 
 from undodb.debugger_extensions import (
     RecordingTime,
-    gdbutils,
+    debugger_utils,
     udb,
     )
 
@@ -29,7 +29,7 @@ class BookmarksSave(gdb.Command):
     @staticmethod
     def invoke(arg, from_tty):
         with open(arg, 'w') as f:
-            f.write(gdbutils.execute_to_string('uinfo bookmarks'))
+            f.write(debugger_utils.execute_to_string('uinfo bookmarks'))
 
 
 bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): ([0-9]+).*''')
@@ -51,7 +51,7 @@ class BookmarksRestore(gdb.Command):
                         pc = int(match.group(2), 16)
                         num = match.group(3)
                         udb.time.goto(RecordingTime(bbcount, pc))
-                        gdbutils.execute_to_string('ubookmark {}'.format(num))
+                        debugger_utils.execute_to_string('ubookmark {}'.format(num))
 
 
 BookmarksSave()

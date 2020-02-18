@@ -9,7 +9,7 @@ from __future__ import absolute_import, print_function
 import gdb
 
 from undodb.debugger_extensions import (
-    gdbutils,
+    debugger_utils,
     udb,
     )
 
@@ -21,7 +21,7 @@ class RegsEveryBB(gdb.Command):
     @staticmethod
     def invoke(arg, from_tty):
         with udb.time.auto_reverting():
-            with gdbutils.temporary_parameter('pagination', False):
+            with debugger_utils.temporary_parameter('pagination', False):
                 args = gdb.string_to_argv(arg)
 
                 start_bbcount = int(args[0])
