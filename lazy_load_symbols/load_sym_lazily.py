@@ -10,9 +10,10 @@ import traceback
 
 import gdb
 
+PROFILING = False
 
 def parse_raw_symlist(syml):
-    symre = r' ([^ ]*)$'
+    symre = r'[0-9 ]+\s[\w]\s(.*)'
     symc = re.compile(symre)
     for line in syml.split('\n'):
         m = symc.search(line)
@@ -22,14 +23,16 @@ def parse_raw_symlist(syml):
 
 def extract_symbol_list_from_so(file_name):
     try:
-        symlist = subprocess.check_output(['nm', '-C', file_name])
+        symlist = subprocess.check_output(['nm', '-C', file_name], stderr=PIPE)
+        if not symlist:
+            pdb_name = file_name.replace('.so', '.pdb')
+            symlist = subprocess.check_output(['nm', '-C', pdb_name], stderr=PIPE)
     except subprocess.CalledProcessError:
-        print('nm -C {} failed'.format(file_name))
-        raise
+        print('nm -C {} failed.'.format(file_name))
     except OSError:
         print('no usable "nm" found, cannot continue')
         raise
-    assert symlist, 'no symbols in file {}'.format(file_name)
+    #assert symlist, 'no symbols in file {}'.format(file_name)
     return symlist
 
 
@@ -89,19 +92,12 @@ class LoadLazySymbols(gdb.Command):
 
     def __init__(self):
         super(LoadLazySymbols, self).__init__('loadlazy', gdb.COMMAND_DATA, gdb.COMPLETE_FILENAME)
-        self.sodict = {}
         self.rec = None
 
 
-    def load_all_symbols(self):
-        for content in self.sodict.values():
-            fn = content.fullname
-            content.symbols = extract_symbol_list_from_so(fn)
-
     def invoke(self, rec, from_tty):
         try:
-            if self.sodict and \
-               rec == self.rec:
+            if rec == self.rec:
                 pass
             else:
                 self.rec = rec
@@ -109,6 +105,14 @@ class LoadLazySymbols(gdb.Command):
                 gdb.execute('uload {}'.format(rec))
         except Exception:
             traceback.print_exc()
+
+def get_frame_name(pc):
+    sodict = load_so_list()
+    for name in sodict:
+        sa = int(sodict[name].start, 16)
+        ea = int(sodict[name].end, 16)
+        if pc >= sa and pc < ea:
+            gdb.execute('sharedlibrary {}'.format(name))
 
 class PopulateBT(gdb.Command):
     '''
@@ -118,13 +122,6 @@ class PopulateBT(gdb.Command):
     def __init__(self):
         super(PopulateBT, self).__init__('popbt', gdb.COMPLETE_EXPRESSION)
 
-    def get_frame_name(pc):
-        sodict = load_so_list()
-        for name in sodict:
-            sa = int(sodict[name].start, 16)
-            ea = int(sodict[name].end, 16)
-            if pc >= sa and pc < ea:
-                gdb.execute('sharedlibrary {}'.format(name))
 
     def invoke(self, arg, from_tty):
         curr_frame = gdb.newest_frame()
@@ -134,7 +131,7 @@ class PopulateBT(gdb.Command):
                 # iteratively go through all frames and for each one check if the name is loaded.
                 # if not load the name
                 if not curr_frame.name():
-                    self.get_frame_name(curr_frame.pc())
+                    get_frame_name(curr_frame.pc())
                     frames_loaded = True
                 curr_frame = curr_frame.older()
             except gdb.error:
@@ -172,17 +169,13 @@ class ReverseStepSymbol(gdb.Command):
             print('ERROR: gdb eror', e)
 
     def invoke(self, arg, from_tty):
-        #gdb.execute('bt 1')
         gdb.execute('rsi', to_string=True)  # hide the output
-        #gdb.execute('bt 1')
         # code to resolve the symbol at pc address
         curr_frame = gdb.newest_frame()
-        print(curr_frame, "PC", curr_frame.pc(), "name", curr_frame.name())
         if not curr_frame.name():
             self.get_frame_name(curr_frame.pc())
         try:
             curr_frame = gdb.newest_frame()
-            print(curr_frame.name())
         except gdb.error as e:
             print('ERROR:', e)
         # check symbol is now present
@@ -202,25 +195,23 @@ class LoadLibFromSym(gdb.Command):
         super(LoadLibFromSym, self).__init__('loadsymlib', gdb.COMPLETE_EXPRESSION)
         self.sodict = {}
 
-    def read_lib_symbols(self, so):
+    def check_lib_for_symbol(self, so, symbol):
         fn = self.sodict[so].fullname
         rs = parse_raw_symlist(extract_symbol_list_from_so(fn))
-        self.sodict[so]._replace(symbols = extract_symbols_from_raw_list(rs))
+        match = False
+        for sym in rs:
+            if symbol in sym:
+                print('Got a match: {} contains {}'.format(sym, symbol))
+                match = True
+        if match:
+            ns = raw_input('load library [y]/n ? ') or 'y'
+            if ns != 'n':
+                gdb.execute('sharedlibrary {}'.format(so))
 
-    def find_lib_with_symbol(self, symbol):
-        for so, content in self.sodict.items():
-            if not content.loaded:
-                if not content.symbols:
-                    self.read_lib_symbols(so)
-                if symbol in content.symbols:
-                    content.loaded = True
-                    return so
-        return None
 
     def load_libs_with_name(self, symbol):
-        match = self.find_lib_with_symbol(symbol)
-        assert match, 'didn\'t find a library with symbol {}'.format(symbol)
-        gdb.execute('sharedlibrary {}'.format(match))
+        for so in self.sodict:
+            self.check_lib_for_symbol(so, symbol)
 
     def invoke(self, symbol, from_tty):
         try:
@@ -235,19 +226,8 @@ def time_gdb_execute(cmd):
     gdb.execute(cmd)
     new_time = datetime.datetime.now()
     delta = new_time - old_time
-    print("Duration:", delta.total_seconds(), "command:", cmd)
-
-def ugo_random():
-    endre = r'.*in recorded range: .*- ([0-9,]+)\].*'
-    endc = re.compile(endre)
-    uinfo_time = gdb.execute('uinfo time', to_string=True)
-    m = endc.match(uinfo_time)
-    end_bb = m.group(1)
-    end_bb = end_bb.replace(',', '')
-    random_bb = random.randint(1, long(end_bb))
-    cmd = 'ugo time {}'.format(random_bb)
-    print(cmd)
-    time_gdb_execute(cmd)
+    if PROFILING:
+        print('Duration: {} command: {}'.format(delta.total_seconds(), cmd))
 
 LoadLibFromSym()
 LoadLazySymbols()
