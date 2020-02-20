@@ -32,7 +32,7 @@ class BookmarksSave(gdb.Command):
             f.write(debugger_utils.execute_to_string('uinfo bookmarks'))
 
 
-bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): ([0-9]+).*''')
+bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): (.*)''')
 
 
 class BookmarksRestore(gdb.Command):
@@ -49,9 +49,9 @@ class BookmarksRestore(gdb.Command):
                     if match is not None:
                         bbcount = int(match.group(1).replace(',', ''))
                         pc = int(match.group(2), 16)
-                        num = match.group(3)
+                        name = match.group(3)
                         udb.time.goto(RecordingTime(bbcount, pc))
-                        debugger_utils.execute_to_string('ubookmark {}'.format(num))
+                        debugger_utils.execute_to_string('ubookmark "{}"'.format(name))
 
 
 BookmarksSave()
