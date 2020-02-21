@@ -22,9 +22,12 @@ def count_calls(func_name):
     return bp.hit_count
 
 
+# UndoDB will automatically load the modules passed to UdbLauncher.add_extension
+# and, if present, automatically execute any function (with no arguments) called
+# "run".
 def run():
-    # The function where to stopped is passed to us form the outer script
-    # in the run_data dictionary.
+    # The function where to stop is passed to us from the outer script in the
+    # run_data dictionary.
     func_name = udb.run_data['func_name']
 
     hit_count = count_calls(func_name)
