@@ -23,8 +23,9 @@ def main(argv):
     launcher = UdbLauncher()
     # Make UndoDB run with our recording.
     launcher.recording_file = recording
-    # Make UndoDB load the extension.py file from the current directory.
-    launcher.add_extension('extension')
+    # Make UndoDB load the count_calls_extension.py file from the current
+    # directory.
+    launcher.add_extension('count_calls_extension')
     # Tell the extension the function name.
     launcher.run_data['func_name'] = func_name
     # Finally, launch UndoDB! (And hide the output, we don't want it on screen.)
