@@ -46,7 +46,7 @@ def extract_symbols_from_raw_list(rs):
         sym_name = subprocess.check_output(['c++filt', sym])
         assert sym_name, 'c++filt didn\'t demangle {}'.format(sym)
         parsed_list.append(sym_name)
-    return ''.join(parsed_list)
+    return ' '.join(parsed_list)
 
 
 SOInfo = namedtuple('SOInfo', ['fullname', 'symbols', 'start', 'end', 'loaded'])
