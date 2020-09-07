@@ -28,7 +28,7 @@ class BookmarksSave(gdb.Command):
             f.write(gdb.execute('uinfo bookmarks', to_string=True))
 
 
-bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): ([0-9]+).*''')
+bookmark_pattern = re.compile(r'''\s+([0-9,]+):0x([0-9a-f]+): ([-0-9a-zA-Z_]+).*''')
 
 
 class BookmarksRestore(gdb.Command):
