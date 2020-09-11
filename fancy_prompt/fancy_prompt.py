@@ -4,8 +4,6 @@ Contributors: Mark Williamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-from __future__ import absolute_import, division
-
 import re
 import datetime
 import gdb
@@ -31,7 +29,7 @@ class PromptColour(gdb.Command):
     '''
 
     def __init__(self):
-        super(PromptColour, self).__init__('prompt-color', gdb.COMMAND_SUPPORT)
+        super().__init__('prompt-color', gdb.COMMAND_SUPPORT)
 
     @staticmethod
     def invoke(argument, from_tty):
@@ -95,7 +93,7 @@ def undodb_get_state():
     elif RE_MODE_DEFERRED.match(mode):
         return STATE_DEFER
 
-    raise RuntimeError('Cannot get debuggee state. Dont know about {}'.format(mode))
+    raise RuntimeError(f'Cannot get debuggee state. Dont know about {mode}')
 
 
 def undodb_get_time():
@@ -167,7 +165,7 @@ def prompt_progress():
         return term_colour(TERM_CYAN, '[0%]')
     bb_now = undodb_get_time().bbcount
     perc = 100 * float(bb_now - bb_start) / extent_time
-    return term_colour(TERM_CYAN, '[{:3.0f}%]'.format(perc))
+    return term_colour(TERM_CYAN, f'[{perc:3.0f}%]')
 
 
 def prompt_bbcount():

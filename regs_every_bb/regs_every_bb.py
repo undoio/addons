@@ -4,8 +4,6 @@ Contibutors:  Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-from __future__ import absolute_import, print_function
-
 import gdb
 
 from undodb.debugger_extensions import (
@@ -16,7 +14,7 @@ from undodb.debugger_extensions import (
 
 class RegsEveryBB(gdb.Command):
     def __init__(self):
-        super(RegsEveryBB, self).__init__('uregs', gdb.COMMAND_USER)
+        super().__init__('uregs', gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
@@ -32,7 +30,7 @@ class RegsEveryBB(gdb.Command):
                 while current_bbcount <= end_bbcount:
                     # Print values of registers at each basic block in range
                     udb.time.goto(current_bbcount)
-                    print('{}:'.format(current_bbcount))
+                    print(f'{current_bbcount}:')
                     gdb.execute('info reg')
                     print()
                     current_bbcount += 1

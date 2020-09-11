@@ -1,7 +1,5 @@
 '''Utility that loads a debug symbol file by parsing .text. .data and .bss section addresses'''
 
-from __future__ import absolute_import, print_function
-
 import os
 import re
 import gdb
@@ -43,7 +41,7 @@ class LoadDebugFile(gdb.Command):
     '''
 
     def __init__(self):
-        super(LoadDebugFile, self).__init__('load-debug-symbols', gdb.COMPLETE_EXPRESSION)
+        super().__init__('load-debug-symbols', gdb.COMPLETE_EXPRESSION)
 
     @staticmethod
     def invoke(args, from_tty):
@@ -54,7 +52,7 @@ class LoadDebugFile(gdb.Command):
 
         dbg_file = arglist[0]
         if not os.path.exists(dbg_file):
-            print('{} is not a valid file path'.format(dbg_file))
+            print(f'{dbg_file} is not a valid file path')
             return
 
         section_map = parse_sections()

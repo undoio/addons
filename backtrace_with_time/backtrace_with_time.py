@@ -6,9 +6,6 @@ Contributors: Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-
-from __future__ import absolute_import, print_function
-
 import gdb
 
 from undodb.debugger_extensions import (
@@ -19,7 +16,7 @@ from undodb.debugger_extensions import (
 
 class BacktraceWithTime(gdb.Command):
     def __init__(self):
-        super(BacktraceWithTime, self).__init__('ubt', gdb.COMMAND_USER)
+        super().__init__('ubt', gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
@@ -44,7 +41,7 @@ class BacktraceWithTime(gdb.Command):
                         # not available, or we have reached the start.
                         exception_hit = True
                 else:
-                    print('[?]\t{}'.format(line))
+                    print(f'[?]\t{line}')
 
 
 BacktraceWithTime()

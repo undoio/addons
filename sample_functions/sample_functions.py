@@ -12,9 +12,6 @@ Contributers: Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-
-from __future__ import absolute_import, division, print_function
-
 from collections import defaultdict
 
 import gdb
@@ -31,7 +28,7 @@ class SampleFunctions(gdb.Command):
     '''
 
     def __init__(self):
-        super(SampleFunctions, self).__init__('usample', gdb.COMMAND_USER)
+        super().__init__('usample', gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):

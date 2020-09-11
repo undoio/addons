@@ -10,8 +10,6 @@ Contributors: Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-from __future__ import absolute_import, with_statement, print_function
-
 import re
 import gdb
 
@@ -24,7 +22,7 @@ from undodb.debugger_extensions import (
 
 class BookmarksSave(gdb.Command):
     def __init__(self):
-        super(BookmarksSave, self).__init__('ubooksave', gdb.COMMAND_USER)
+        super().__init__('ubooksave', gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
@@ -37,13 +35,13 @@ bookmark_pattern = re.compile(r'''    ([0-9,]+):0x([0-9a-f]+): (.*)''')
 
 class BookmarksRestore(gdb.Command):
     def __init__(self):
-        super(BookmarksRestore, self).__init__('ubookrestore',
+        super().__init__('ubookrestore',
                                                gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
         with udb.time.auto_reverting():
-            with open(arg, 'r') as f:
+            with open(arg) as f:
                 for bookmark in f:
                     match = bookmark_pattern.match(bookmark)
                     if match is not None:
@@ -51,7 +49,7 @@ class BookmarksRestore(gdb.Command):
                         pc = int(match.group(2), 16)
                         name = match.group(3)
                         udb.time.goto(RecordingTime(bbcount, pc))
-                        debugger_utils.execute_to_string('ubookmark "{}"'.format(name))
+                        debugger_utils.execute_to_string(f'ubookmark "{name}"')
 
 
 BookmarksSave()

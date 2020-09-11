@@ -6,8 +6,6 @@ Contributors: Mark Willamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
 
-from __future__ import absolute_import, print_function
-
 import tempfile
 import re
 import gdb
@@ -25,7 +23,7 @@ def fetch_maps_remote():
     '''
     with tempfile.NamedTemporaryFile(mode='r', delete=True) as maps:
         pid = gdb.selected_inferior().pid
-        gdb.execute('remote get /proc/{}/maps {}'.format(pid, maps.name))
+        gdb.execute(f'remote get /proc/{pid}/maps {maps.name}')
         return maps.read()
 
 
@@ -35,7 +33,7 @@ def fetch_maps_local():
     without using a remote debug server.
     '''
     pid = gdb.selected_inferior().pid
-    with open('/proc/{}/maps'.format(pid)) as maps:
+    with open(f'/proc/{pid}/maps') as maps:
         return maps.read()
 
 
@@ -79,7 +77,7 @@ class WhatMapCommand(gdb.Command):
     '''
 
     def __init__(self):
-        super(WhatMapCommand, self).__init__('whatmap',
+        super().__init__('whatmap',
                                              gdb.COMPLETE_EXPRESSION)
 
     @staticmethod
@@ -96,7 +94,7 @@ class WhatMapCommand(gdb.Command):
         # This allows the user to e.g. just specify a variable name.
         address = int(value.address.cast(uintptr_type))
 
-        print('Searching maps for address 0x{:x}:'.format(address))
+        print(f'Searching maps for address 0x{address:x}:')
         _map = find_map(address)
         if _map:
             print('    ' + _map)
