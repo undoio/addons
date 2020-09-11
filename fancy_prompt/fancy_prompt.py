@@ -54,7 +54,7 @@ def undodb_get_extent():
     Returns: (bb_start, bb_end) tuple of start and end bbcounts.
     '''
     undodb_state = undodb_get_state()
-    if undodb_state == STATE_DEFER or undodb_state == STATE_NONE:
+    if undodb_state in (STATE_DEFER, STATE_NONE):
         return None
     return udb.get_event_log_extent()
 
@@ -105,7 +105,7 @@ def undodb_get_time():
     Returns: Tuple of (bbcount, pc), or None if no time is available.
     '''
     undodb_state = undodb_get_state()
-    if undodb_state == STATE_DEFER or undodb_state == STATE_NONE:
+    if undodb_state in (STATE_DEFER, STATE_NONE):
         return None
 
     return udb.time.get()
