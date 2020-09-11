@@ -49,6 +49,16 @@ done < <(git ls-files --full-name -z)
 [[ ${#py_files[@]} != 0 ]] || error_exit "No Python files in the repository?"
 
 
+# Black
+
+echo "== BLACK == "
+
+"${linters_dir}/run-black.sh" \
+    --check \
+    "${py_files[@]}"
+error_or_success $?
+
+
 # Pylint
 
 echo "== PYLINT == "
