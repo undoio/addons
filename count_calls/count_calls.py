@@ -20,11 +20,11 @@ def main(argv):
         print('{} RECORDING_FILE FUNCTION_NAME'.format(sys.argv[0]))
         raise SystemExit(1)
 
-    # Prepare for launching UndoDB.
+    # Prepare for launching UDB.
     launcher = UdbLauncher()
-    # Make UndoDB run with our recording.
+    # Make UDB run with our recording.
     launcher.recording_file = recording
-    # Make UndoDB load the count_calls_extension.py file from the current
+    # Make UDB load the count_calls_extension.py file from the current
     # directory.
     launcher.add_extension('count_calls_extension')
     # Tell the extension which function name it needs to check.
@@ -32,13 +32,13 @@ def main(argv):
     # stored and passed to the extension (as long as it can be serialised using
     # the Python pickle module).
     launcher.run_data['func_name'] = func_name
-    # Finally, launch UndoDB!
+    # Finally, launch UDB!
     # We collect the output as, in normal conditions, we don't want to show it
     # to the user but, in case of errors, we want to display it.
     res = launcher.run_debugger(redirect_debugger_output=REDIRECTION_COLLECT)
 
     if res.exit_code == 0:
-        # All good as UndoDB exited with exit code 0 (i.e. no errors).
+        # All good as UDB exited with exit code 0 (i.e. no errors).
         print('The recording hit "{}" {} time(s).'.format(
             func_name,
             # The result_data attribute is analogous to UdbLauncher.run_data but
@@ -52,7 +52,7 @@ def main(argv):
             textwrap.dedent(
                 '''\
                 Error!
-                UndoDB exited with code {res.exit_code}.
+                UDB exited with code {res.exit_code}.
 
                 The output was:
 
@@ -60,7 +60,7 @@ def main(argv):
                 ''').format(res=res),
             file=sys.stderr,
             )
-        # Exit this script with the same error code as UndoDB.
+        # Exit this script with the same error code as UDB.
         raise SystemExit(res.exit_code)
 
 

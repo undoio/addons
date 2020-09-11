@@ -1,7 +1,7 @@
 Fancy prompt
 ============
 
-Enhanced prompt support for UndoDB.  
+Enhanced prompt support for UDB.  
 Adds: 
 * current wall-clock time
 * debuggee state

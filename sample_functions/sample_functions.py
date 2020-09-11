@@ -1,6 +1,6 @@
 '''
 Sampler which uses debug info (via gdb's "where" command)
-together with UndoDB's ugo command to count the number of times we find
+together with UDB's ugo command to count the number of times we find
 ourselves in a particular function.
 
 Usage:

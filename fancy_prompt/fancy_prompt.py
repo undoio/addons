@@ -1,5 +1,5 @@
 '''
-Enhanced prompt support for UndoDB.
+Enhanced prompt support for UDB.
 Contributors: Mark Williamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 '''
@@ -22,7 +22,7 @@ colour_enabled = False
 
 class PromptColour(gdb.Command):
     '''
-    Set color on or off for enhanced UndoDB prompt.
+    Set color on or off for enhanced UDB prompt.
 
     Usage: prompt-color SETTING
 
@@ -64,11 +64,11 @@ STATE_DEFER = 'deferred'
 STATE_RECORD = 'record'
 STATE_REPLAY = 'replay'
 
-RE_MODE_NOT_DEBUGGING = re.compile(r'(udb: )?UndoDB is not debugging an application')
-RE_MODE_RECORD = re.compile(r'(udb: )?UndoDB is in record mode')
-RE_MODE_REPLAY = re.compile(r'(udb: )?UndoDB is in replay mode')
-RE_MODE_REPLAY_LOADED = re.compile('(udb: )?UndoDB is replaying a loaded recording')
-RE_MODE_DEFERRED = re.compile(r'(udb: )?UndoDB is in deferred-recording mode')
+RE_MODE_NOT_DEBUGGING = re.compile(r'(udb: )?(UDB|UndoDB) is not debugging an application')
+RE_MODE_RECORD = re.compile(r'(udb: )?(UDB|UndoDB) is in record mode')
+RE_MODE_REPLAY = re.compile(r'(udb: )?(UDB|UndoDB) is in replay mode')
+RE_MODE_REPLAY_LOADED = re.compile('(udb: )?(UDB|UndoDB) is replaying a loaded recording')
+RE_MODE_DEFERRED = re.compile(r'(udb: )?(UDB|UndoDB) is in deferred-recording mode')
 
 
 def undodb_get_state():
@@ -100,7 +100,7 @@ def undodb_get_state():
 
 def undodb_get_time():
     '''
-    Get the current UndoDB debuggee time.
+    Get the current UDB debuggee time.
 
     Returns: Tuple of (bbcount, pc), or None if no time is available.
     '''
