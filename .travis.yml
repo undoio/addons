@@ -1,18 +1,13 @@
-# We need Python 3 for mypy and Python 2 for pylint and pycodestyle.
-# If we set a language there then the chosen Python will be used in a venv, but that's
-# not what we want.
-language: generic
+language: python
+
+python:
+    - "3.6"
 
 os:
   - linux
 
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install -y git python2.7 python-pip python3-pip
-  - sudo pip install --ignore-installed pylint==1.9.3
-  - sudo pip install --ignore-installed pycodestyle==2.4.0
-  - sudo pip install --ignore-installed typing==3.7.4
-  - sudo pip3 install --ignore-installed mypy
+install:
+  - pip install -r requirements.txt
 
 script:
   - ./_linters/run-all.sh
