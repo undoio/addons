@@ -1,25 +1,22 @@
-'''
+"""
 Adds a ubt command which adds basic block counts to frames within a backtrace.
    Usage: ubt
 
 Contributors: Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
-'''
-
-
-from __future__ import absolute_import, print_function
+"""
 
 import gdb
 
 from undodb.debugger_extensions import (
     debugger_utils,
     udb,
-    )
+)
 
 
 class BacktraceWithTime(gdb.Command):
     def __init__(self):
-        super(BacktraceWithTime, self).__init__('ubt', gdb.COMMAND_USER)
+        super().__init__("ubt", gdb.COMMAND_USER)
 
     @staticmethod
     def invoke(arg, from_tty):
@@ -27,7 +24,7 @@ class BacktraceWithTime(gdb.Command):
         # hitting anything we shouldn't.
         with udb.time.auto_reverting(), debugger_utils.suspend_breakpoints():
             # Get the whole backtrace.
-            backtrace = debugger_utils.execute_to_string('where')
+            backtrace = debugger_utils.execute_to_string("where")
             backtrace = backtrace.splitlines()
 
             exception_hit = False
@@ -35,16 +32,16 @@ class BacktraceWithTime(gdb.Command):
                 if not exception_hit:
                     # Print time at start of each backtrace line.
                     time = udb.time.get()
-                    print('[{}]\t{}'.format(str(time.bbcount), line))
+                    print("[{}]\t{}".format(str(time.bbcount), line))
                     try:
                         # Go back to previous frame
-                        debugger_utils.execute_to_string('rf')
+                        debugger_utils.execute_to_string("rf")
                     except gdb.error:
                         # Can't figure out any further - perhaps stack frame is
                         # not available, or we have reached the start.
                         exception_hit = True
                 else:
-                    print('[?]\t{}'.format(line))
+                    print(f"[?]\t{line}")
 
 
 BacktraceWithTime()
