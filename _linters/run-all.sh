@@ -49,52 +49,24 @@ done < <(git ls-files --full-name -z)
 [[ ${#py_files[@]} != 0 ]] || error_exit "No Python files in the repository?"
 
 
+# Black
+
+echo "== BLACK == "
+
+"${linters_dir}/run-black.sh" \
+    --check \
+    "${py_files[@]}"
+error_or_success $?
+
+
 # Pylint
 
 echo "== PYLINT == "
 
-pylint \
+python3 -m pylint \
     --rcfile=_linters/pylintrc \
     --reports=n \
     --score=n \
-    "${py_files[@]}"
-error_or_success $?
-
-
-# Pylint (Python 3 mode)
-
-echo "== PYLINT (PYTHON 3 MODE) == "
-
-pylint \
-    --py3k \
-    --disable useless-suppression \
-    --rcfile=_linters/pylintrc \
-    --reports=n \
-    --score=n \
-    "${py_files[@]}"
-error_or_success $?
-
-
-# Pycodestyle
-
-echo "== PYCODESTYLE == "
-
-pycodestyle_ignore=(
-    'E123' # Closing bracket indentation. Checked by pylint.
-    'E124' # Closing bracket not aligned. Pylint has different opinions.
-    'E241' # Multiple spaces after colon. Allowed for dicts.
-    'E261' # Two spaces before inline comment.
-    'E266' # Too many "#". It's useful to define blocks of code.
-    'E402' # Module level import not at the top. Checked by pylint.
-    'E501' # Line too long. Checked by pylint.
-    'E701' # Multiple statements in one line. Checked by pylint.
-    'E722' # Bare except. Checked by pylint.
-    'E731' # Do not assign lambda. Needed when defining argument to avoid a function redef error.
-    'E741' # Ambiguous variable name. Pylint already checks for names.
-    'W504' # Line break after binary operator. This is the recommended style (503 is the opposite).
-    )
-pycodestyle \
-    --ignore="$(join "," "${pycodestyle_ignore[@]}")" \
     "${py_files[@]}"
 error_or_success $?
 
@@ -104,7 +76,7 @@ error_or_success $?
 echo "== MYPY == "
 
 export MYPYPATH=_linters/mypy-stubs
-mypy \
+python3 -m mypy \
     --follow-imports=silent \
     --config-file=_linters/mypy.ini \
     "${py_files[@]}"

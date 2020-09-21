@@ -4,7 +4,7 @@ UDB Addons
 ==========
 
 A collection of add-on scripts and configuration to enhance the functionality
-provided by [UndoDB](http://undo.io/) (and, in some cases, also vanilla GDB).
+provided by [UDB](http://undo.io/) (and, in some cases, also vanilla GDB).
 
 
 Summary
@@ -20,7 +20,7 @@ Save and restore bookmarks to and from a file.
 Adds completion of udb command line parameters in bash.
 
 [**Fancy prompt**](fancy_prompt/README.md)  
-Enhanced prompt support for UndoDB.
+Enhanced prompt support for UDB.
 
 [**Regs every bb**](regs_every_bb/README.md)  
 Prints the values of all the registers at every basic block within a range.
@@ -40,6 +40,6 @@ Development
 Feel free to make a pull request against the project!
 
 The [`master`](https://github.com/undoio/addons/tree/dev) branch supports the
-latest release of UndoDB.
+latest release of UDB.
 The [`dev`](https://github.com/undoio/addons/tree/dev) branch contains code
-meant for the next future release of UndoDB.
+meant for the next future release of UDB.
