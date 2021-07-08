@@ -10,6 +10,9 @@ provided by [UDB](http://undo.io/) (and, in some cases, also vanilla GDB).
 Summary
 -------
 
+[**Automatic symbol loading**](automatic_symbol_loading/README.md)
+Loads all debug files in the specified directory.
+
 [**Backtrace with time**](backtrace_with_time/README.md)  
 Adds a ubt command which adds basic block counts to frames within a backtrace.
 
