@@ -1,5 +1,7 @@
 [![Build status](https://api.travis-ci.com/undoio/addons.svg?master)](https://travis-ci.com/undoio/addons)
 
+FOO
+
 UDB Addons
 ==========
 
