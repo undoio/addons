@@ -19,7 +19,7 @@ from typing import (
     Callable,
     List,
     Generator,
-    ) 
+    )
 
 
 if sys.version_info[0] > 2:
@@ -334,6 +334,7 @@ class Objfile(object):
     pretty_printers: List[_pretty_printer_func]
 
     def is_valid(self) -> bool: ...
+    def add_separate_debug_file(self, file: str) -> None: ...
 
 
 class Symtab(object):
@@ -411,7 +412,7 @@ _CompleteResult = Union[int, Iterable[str], None]
 
 class Command(object):
     def __init__(self, name: str, command_class: _CommandClassType,
-                 completer_class: _CommandCompleteType, prefix: bool) -> None: ...
+                 completer_class: _CommandCompleteType = ..., prefix: bool = ...) -> None: ...
     def dont_repeat(self) -> None: ...
     def invoke(self, argument: str, from_tty: bool) -> None: ...
     def complete(self, text: str, word: str) -> _CompleteResult: ...
