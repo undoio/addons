@@ -65,10 +65,10 @@ class SampleFunctions(gdb.Command):
                             trace_functions.append(frame.name())
                         else:
                             # If no symbol for function use pc
-                            trace_functions.append(str(frame.pc()))
+                            trace_functions.append(hex(frame.pc()))
                         frame = frame.older()
                     # Concatenate functions in backtrace to create key
-                    key = "->".join(reversed(trace_functions))
+                    key = ";".join(reversed(trace_functions))
                     functions[key] += 1
 
         # Now print what we've found...
