@@ -12,6 +12,8 @@ Contributers: Isa Smith, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 """
 
+import sys
+
 from collections import defaultdict
 
 import gdb
@@ -34,7 +36,7 @@ class SampleFunctions(gdb.Command):
     def invoke(arg, from_tty):
         """
         arg is:
-        <start_bbcount> <end_bbcount> <bbcount_interval>
+        <start_bbcount> <end_bbcount> <bbcount_interval> [<filename>]
         E.g. 0 1000 1
         means sample every basic block from 1 to 1000.
         """
@@ -47,6 +49,11 @@ class SampleFunctions(gdb.Command):
             end_bbcount = int(args[1])
             interval = int(args[2])
 
+            if len(args) > 3:
+                output = open(args[3], "wt")
+            else:
+                output = sys.stdout
+
             with debugger_utils.temporary_parameter("print address", False):
                 for current_bbcount in range(start_bbcount, end_bbcount + 1, interval):
                     udb.time.goto(current_bbcount)
@@ -58,15 +65,15 @@ class SampleFunctions(gdb.Command):
                             trace_functions.append(frame.name())
                         else:
                             # If no symbol for function use pc
-                            trace_functions.append(str(frame.pc()))
+                            trace_functions.append(hex(frame.pc()))
                         frame = frame.older()
                     # Concatenate functions in backtrace to create key
-                    key = "->".join(reversed(trace_functions))
+                    key = ";".join(reversed(trace_functions))
                     functions[key] += 1
 
         # Now print what we've found...
         for function in functions:
-            print("{} {}".format(function, str(functions[function])))
+            print("{} {}".format(function, str(functions[function])), file=output)
 
 
 SampleFunctions()
