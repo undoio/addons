@@ -50,7 +50,7 @@ class SampleFunctions(gdb.Command):
             interval = int(args[2])
 
             if len(args) > 3:
-                output = open(args[3], "wt")
+                output = open(args[3], "wt")  # pylint:disable=consider-using-with
             else:
                 output = sys.stdout
 
