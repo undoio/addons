@@ -31,6 +31,10 @@ Allows live-record to record both parent and child after `fork()` has been calle
 [**Load Debug Symbols**](load_debug_symbols/README.md)
 Loads debug symbols by parsing the relevant section addresses.
 
+[**Reconstruct file**](reconstruct_file/README.md)
+Reconstructs the content of a file by analysing reads on the execution history
+of a debugged program or LiveRecorder recording.
+
 [**Regs every bb**](regs_every_bb/README.md)  
 Prints the values of all the registers at every basic block within a range.
 
