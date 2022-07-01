@@ -1,6 +1,6 @@
 # Sample functions
 
-Sampler which counts the number of times we find ourselves in a particular function. 
+Sampler which counts the number of times we find ourselves in a particular function.
 Outputs a list of functions with their counts.
 ```
 Usage:
@@ -13,6 +13,11 @@ Usage:
 
   E.g. 1 1000 1
   means sample every basic block count from 1 to 1000.
+```
+
+Before using the script it must be loaded in to the debugger:
+```
+source PATHTOADDONS/sample_functions/sample_functions.py
 ```
 
 ## Generating flame graphs
