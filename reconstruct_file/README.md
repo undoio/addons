@@ -1,11 +1,10 @@
-Reconstruct file
-================
+# Reconstruct file
 
 Reconstruct a file read by the target program by examining its execution
 history. Use the `-regex` or `-fd` options to select which file to reconstruct
 or, if omitted, the first file opened is reconstructed.
 
-Usage:
+## Usage
 
 ```
 reconstruct-file [-regex PATH-REGEX | -fd FILE-DESCRIPTOR]
@@ -13,7 +12,12 @@ reconstruct-file [-regex PATH-REGEX | -fd FILE-DESCRIPTOR]
                  [-output OUTPUT-PATH]
 ```
 
-Optional arguments:
+Before using the script it must be loaded in to the debugger:
+```
+source PATHTOADDONS/reconstruct_file/reconstruct_file.py
+```
+
+### Optional arguments
 
 - `-regex PATH-REGEX`:
   A regular expression matching the path of the file to reconstruct. Only the
@@ -28,7 +32,7 @@ Optional arguments:
   Path to a file were to write the reconstructed file. If not specified, the
   content is printed on standard output.
 
-Limitations:
+## Limitations
 
 - Only 64-bit x86 is supported.
 - Only files which are read in their entirety can be fully reconstructed.
