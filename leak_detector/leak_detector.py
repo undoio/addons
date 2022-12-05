@@ -11,11 +11,10 @@ Contibutors:  Emiliano Testa
 Copyright (C) 2022 Undo Ltd
 """
 
-import gdb
 import copy
+import gdb
 
 from undodb.debugger_extensions import (
-    debugger_utils,
     udb,
 )
 
@@ -44,14 +43,13 @@ def handle_alloc_fn():
 def handle_free_fn():
     frame = gdb.selected_frame()
     addr = frame.read_register("rdi")
-    bbcount = udb.time.get().bbcount
     global all_allocs
     for alloc in copy.copy(all_allocs):
         if alloc.addr == addr:
             all_allocs.remove(alloc)
 
 
-def handle_bpEvent(event):
+def handle_bp_event(event):
     if hasattr(event, 'breakpoints'):
         for bp in event.breakpoints:
             if bp.location == ALLOC_FN:
@@ -66,9 +64,9 @@ class LeakDetect(gdb.Command):
 
     @staticmethod
     def invoke(arg, from_tty):
-        bp_malloc = gdb.Breakpoint(ALLOC_FN)
-        bp_free = gdb.Breakpoint(FREE_FN)
-        gdb.events.stop.connect(handle_bpEvent)
+        gdb.Breakpoint(ALLOC_FN)
+        gdb.Breakpoint(FREE_FN)
+        gdb.events.stop.connect(handle_bp_event)
         end_of_time = udb.get_event_log_extent().max_bbcount
         gdb.execute("continue")
         while udb.time.get().bbcount < end_of_time:
@@ -80,4 +78,3 @@ class LeakDetect(gdb.Command):
 
 
 LeakDetect()
-
