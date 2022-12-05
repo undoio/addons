@@ -19,16 +19,17 @@ from undodb.debugger_extensions import (
 )
 
 
-ALLOC_FN="malloc"
-FREE_FN="free"
+ALLOC_FN = "malloc"
+FREE_FN = "free"
 all_allocs = []
 
 
-class MemAlloc():
+class MemAlloc:
     def __init__(self, addr, size, bbcount):
         self.addr = addr
         self.size = size
         self.bbcount = bbcount
+
 
 def handle_alloc_fn():
     frame = gdb.selected_frame()
@@ -37,20 +38,21 @@ def handle_alloc_fn():
     gdb.execute("finish")
     frame = gdb.selected_frame()
     addr = frame.read_register("rax")
-    global all_allocs
+    #    global all_allocs
     all_allocs.append(MemAlloc(addr, size, bbcount))
+
 
 def handle_free_fn():
     frame = gdb.selected_frame()
     addr = frame.read_register("rdi")
-    global all_allocs
+    #    global all_allocs
     for alloc in copy.copy(all_allocs):
         if alloc.addr == addr:
             all_allocs.remove(alloc)
 
 
 def handle_bp_event(event):
-    if hasattr(event, 'breakpoints'):
+    if hasattr(event, "breakpoints"):
         for bp in event.breakpoints:
             if bp.location == ALLOC_FN:
                 handle_alloc_fn()
@@ -72,9 +74,9 @@ class LeakDetect(gdb.Command):
         while udb.time.get().bbcount < end_of_time:
             gdb.execute("continue")
         print("Calls to allocator fn that don't have a corresponding free")
-        global all_allocs
+        #        global all_allocs
         for alloc in all_allocs:
-            print(f'{hex(alloc.addr)} - {hex(alloc.size)} - {alloc.bbcount}')
+            print(f"{hex(alloc.addr)} - {hex(alloc.size)} - {alloc.bbcount}")
 
 
 LeakDetect()
