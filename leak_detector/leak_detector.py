@@ -38,14 +38,12 @@ def handle_alloc_fn():
     gdb.execute("finish")
     frame = gdb.selected_frame()
     addr = frame.read_register("rax")
-    #    global all_allocs
     all_allocs.append(MemAlloc(addr, size, bbcount))
 
 
 def handle_free_fn():
     frame = gdb.selected_frame()
     addr = frame.read_register("rdi")
-    #    global all_allocs
     for alloc in copy.copy(all_allocs):
         if alloc.addr == addr:
             all_allocs.remove(alloc)
@@ -74,7 +72,6 @@ class LeakDetect(gdb.Command):
         while udb.time.get().bbcount < end_of_time:
             gdb.execute("continue")
         print("Calls to allocator fn that don't have a corresponding free")
-        #        global all_allocs
         for alloc in all_allocs:
             print(f"{hex(alloc.addr)} - {hex(alloc.size)} - {alloc.bbcount}")
 
