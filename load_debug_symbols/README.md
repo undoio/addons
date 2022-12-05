@@ -1,5 +1,4 @@
-Load Debug Symbols
-==================
+# Load Debug Symbols
 
 A common practice amongst customers is to produce binaries compiled with debug symbols and
 then use a tool such as `objcopy` to strip it of symbols, producing a `.debug` symbol file
@@ -12,10 +11,19 @@ retrospectively add the debug symbols to the recording, the user is required to 
 `add-symbol-file` command in udb and pass in the `.debug` file and relevant addresses for the
 `.text`, `.data` and `.bss` sections. This script automates this process.
 
-Usage: `load-debug-symbols PATHTOFILE`
+## Usage
+```
+load-debug-symbols PATHTOFILE
+```
 
-Examples:
-`load-debug-symbols /foo/bar/baz.debug` - Loads the debug symbols by parsing relevant sections.
+Before using the script it must be loaded in to the debugger:
+```
+source PATHTOADDONS/load_debug_symbols/load_debug_symbols.py
+```
+
+## Examples
+
+`load-debug-symbols /foo/bar/baz.debug` : loads the debug symbols by parsing relevant sections.
 
 Note that the argument to `load-debug-symbols` needs to be a valid debug symbol file and
 present in the file system.
