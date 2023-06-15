@@ -22,9 +22,6 @@ Save and restore bookmarks to and from a file.
 [**Completion**](completion/README.md)  
 Adds completion of udb command line parameters in bash.
 
-[**Fancy prompt**](fancy_prompt/README.md)  
-Enhanced prompt support for UndoDB.
-
 [**Follow fork**](follow_fork/README.md)  
 Allows live-record to record both parent and child after `fork()` has been called.
 
