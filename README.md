@@ -41,6 +41,9 @@ Samples the number of times the program is in each function.
 [**What map**](what_map/README.md)  
 Looks up a variable or address within the maps of the debuggee.
 
+[**Google Test annotations**](gtest_annotations/README.md)
+Example Google Test integration to annotate recordings with test status.
+
 Development
 -----------
 
