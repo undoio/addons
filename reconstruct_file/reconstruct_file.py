@@ -266,7 +266,7 @@ class ReconstructFile(gdb.Command):
         if gdb.selected_inferior().architecture().name() != "i386:x86-64":
             raise gdb.GdbError("Only 64-bit x86 is supported.")
 
-        with debugger_utils.suspend_breakpoints(), udb.time.auto_reverting():
+        with debugger_utils.breakpoints_suspended(), udb.time.auto_reverting():
             if opts.from_start:
                 with debugger_io.RedirectOutput("/dev/null"):
                     udb.time.goto_start()
