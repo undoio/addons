@@ -63,7 +63,6 @@ enable=all
 disable=
     suppressed-message,
     locally-disabled,
-    locally-enabled,
     redefined-outer-name,
     unused-argument,
     missing-docstring,
@@ -79,19 +78,22 @@ disable=
     import-error,
     cyclic-import,
     duplicate-code,
-    bad-continuation,
     useless-return,
     comparison-with-callable,
-    useless-object-inheritance,
     import-outside-toplevel,
-    unnecessary-pass,
-    singleton-comparison,
     too-many-ancestors,
     raise-missing-from,
     super-with-arguments,
     f-string-without-interpolation,
     ungrouped-imports,
     wrong-import-position,
+    consider-using-f-string,
+    relative-beyond-top-level,
+    unspecified-encoding,
+    use-sequence-for-iteration,
+    use-dict-literal,
+    broad-exception-raised,
+    missing-timeout,
 
 
 [REPORTS]
@@ -258,13 +260,6 @@ max-line-length=100
 
 # Maximum number of lines in a module
 max-module-lines=3000
-
-# List of optional constructs for which whitespace checking is disabled. `dict-
-# separator` is used to allow tabulation in dicts, etc.: {1  : 1,\n222: 2}.
-# `trailing-comma` allows a space between comma and closing bracket: (a, ).
-# `empty-line` allows space-only lines.
-no-space-check=trailing-comma,
-               dict-separator
 
 # Allow the body of a class to be on the same line as the declaration if body
 # contains single statement.
@@ -498,4 +493,4 @@ known-third-party=enchant
 
 # Exceptions that will emit a warning when being caught. Defaults to
 # "Exception"
-overgeneral-exceptions=Exception
+overgeneral-exceptions=builtins.Exception
