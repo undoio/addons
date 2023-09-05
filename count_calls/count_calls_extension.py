@@ -13,7 +13,7 @@ def count_calls(func_name):
 
     # Do "continue" until we have gone through the whole recording, potentially
     # hitting the breakpoint several times.
-    end_of_time = udb.get_event_log_extent().max_bbcount
+    end_of_time = udb.get_event_log_extent().end
     while udb.time.get().bbcount < end_of_time:
         gdb.execute("continue")
 
