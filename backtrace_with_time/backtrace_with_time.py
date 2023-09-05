@@ -22,7 +22,7 @@ class BacktraceWithTime(gdb.Command):
     def invoke(arg, from_tty):
         # We disable all breakpoints, so we can reverse up the stack without
         # hitting anything we shouldn't.
-        with udb.time.auto_reverting(), debugger_utils.suspend_breakpoints():
+        with udb.time.auto_reverting(), debugger_utils.breakpoints_suspended():
             # Get the whole backtrace.
             backtrace = debugger_utils.execute_to_string("where")
             backtrace = backtrace.splitlines()
