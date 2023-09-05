@@ -6,7 +6,7 @@ import gdb
 
 # Pattern to match output of 'info files'
 pattern = re.compile(
-    r"(?P<begin>[0x0-9a-fA-F]+)\s-\s(?P<end>[0x0-9a-fA-F]+)" r"\s\bis\b\s(?P<section>\.[a-z]+$)"
+    r"(?P<begin>[0x0-9a-fA-F]+)\s-\s(?P<end>[0x0-9a-fA-F]+)\s\bis\b\s(?P<section>\.[a-z]+$)"
 )
 
 
