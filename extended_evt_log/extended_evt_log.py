@@ -4,14 +4,20 @@ that used the file descriptor associated to the socket.
 
 To use, load this file in UDB (see the `source` command).
 
-See `help rebuild-comms` for usage information.
+See `help extended-evt-log` for usage information.
 
 Contributors: Emiliano Testa
+
+
+TODO:
+    1 - Add tests for what is present
+    2 - refactor the code to remove the boilerplate / have a central place for key names
+    3 - Add lots more syscalls (all the ones that use a fd)
+    4 - Think of a way to have a "stream" for syscalls WITHOUT a fd
 """
 
 import argparse
 import json
-from os import remove
 #import re
 import sys
 import textwrap
@@ -109,7 +115,7 @@ class RebuildSocketComms(gdb.Command):
     """
 
     def __init__(self) -> None:
-        name = "extended-ev-log"
+        name = "extended-evt-log"
 
         # Force the width to fit of help messages to fit in 80 columns to match GDB's behaviour.
         class HelpFormatter(argparse.HelpFormatter):
