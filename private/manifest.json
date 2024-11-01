@@ -1,0 +1,66 @@
+{
+    "udb_addons": {
+        "load-all-symbols": {
+            "description": "Search a directory tree for debug symbols.",
+            "repo": "addons",
+            "script": "automatic_symbol_loading/automatic_symbol_loading.py",
+            "version_min": "7.0.0"
+        },
+        "load-debug-symbols": {
+            "description": "Add a debuginfo file.",
+            "repo": "addons",
+            "script": "load_debug_symbols/load_debug_symbols.py",
+            "version_min": "7.0.0"
+        },
+        "reconstruct-file": {
+            "description": "Reconstruct a file from writes to a file descriptor.",
+            "repo": "addons",
+            "script": "reconstruct_file/reconstruct_file.py",
+            "version_min": "7.0.0"
+        },
+        "ubt": {
+            "description": "Adds a ubt command which adds basic block counts to frames within a backtrace.",
+            "repo": "addons",
+            "script": "backtrace_with_time/backtrace_with_time.py",
+            "version_min": "7.0.0"
+        },
+        "uregs": {
+            "description": "Prints the values of all the registers at every basic block within a range.",
+            "repo": "addons",
+            "script": "regs_every_bb/regs_every_bb.py",
+            "version_min": "7.0.0"
+        },
+        "usample": {
+            "description": "Sampler which counts the number of times we find ourselves in a particular function.",
+            "repo": "addons",
+            "script": "sample_functions/sample_functions.py",
+            "version_min": "7.0.0"
+        },
+        "whatmap": {
+            "description": "Looks up a variable or address within the maps of the debuggee.",
+            "repo": "addons",
+            "script": "what_map/what_map.py",
+            "version_min": "7.0.0"
+        },
+        "altui": {
+            "description": "Altui provides a modern and user-friendly alternative to plain UDB and to TUI mode.",
+            "repo": "altui",
+            "script": "source_this.py",
+            "python_package_deps": [
+                "pyte",
+                "textual==0.26.0"
+            ],
+            "python_package_dir": "altui_packages",
+            "version_min": "7.0.0"
+        },
+        "python-debug": {
+            "description": "Proof-of-concept Python debug support.",
+            "repo": "python-debugging",
+            "script": "libpython.gdb",
+            "add_to_python_path": [
+                ""
+            ],
+            "version_min": "7.0.0"
+        }
+    }
+}
