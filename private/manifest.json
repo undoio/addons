@@ -61,6 +61,12 @@
                 ""
             ],
             "version_min": "7.0.0"
+        },
+        "info-wallclock-relative": {
+            "description": "info wallclock-relative command to get wallclock time relative to the start of recording.",
+            "repo": "addons",
+            "script": "relative_wallclock/relative_wallclock.py",
+            "version_min": "7.0.0"
         }
     }
 }
