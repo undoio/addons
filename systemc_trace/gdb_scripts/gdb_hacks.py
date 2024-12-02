@@ -25,6 +25,11 @@ def call_method(val, method_name):
     return gdb.parse_and_eval(eval_string)
 
 
+def get_member(val, member_name):
+    eval_string = "(*(" + str(val.dynamic_type) + "*)(" + str(val.address) + "))." + member_name
+    return gdb.parse_and_eval(eval_string)
+
+
 def call_method_param(val, method_name, param):
     eval_string = "(*(" + str(val.dynamic_type) + "*)(" + str(val.address) + "))." + method_name + "(" + param + ")"
     return gdb.parse_and_eval(eval_string)
