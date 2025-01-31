@@ -1,29 +1,20 @@
 # Created by ripopov
-from __future__ import print_function
+# Modified by Undo
 
 import gdb
 
-import gdb_hacks
 
-# Check for new post GCC5 ABI
-gcc_5_std_string = "std::__cxx11::basic_string<char,std::char_traits<char>,std::allocator<char> >"
+class StdVectorIterator:
+    """A forward iterator through a std::vector."""
 
-if gdb.lookup_symbol(gcc_5_std_string)[
-    0] is None:
-    std_string_name = "std::string"
-else:
-    std_string_name = gcc_5_std_string
-
-
-class StdVectorIterator(object):
-    def __init__(self, begin, end):
+    def __init__(self, begin: gdb.Value, end: gdb.Value) -> None:
         self.cur = begin
         self.end = end
 
-    def next(self):
-        return self.__next__()
+    # def next(self) -> gdb.Value:
+    #    return self.__next__()
 
-    def __next__(self):
+    def __next__(self) -> gdb.Value:
         if self.cur != self.end:
             val = self.cur.dereference()
             self.cur += 1
@@ -32,46 +23,46 @@ class StdVectorIterator(object):
             raise StopIteration()
 
 
-class StdVectorView(object):
-    def __init__(self, val):
-        assert val.dynamic_type.name.startswith('std::vector<')
+class StdVectorView:
+    """Representation of a std::vector."""
+
+    def __init__(self, val: gdb.Value):
+        assert val.dynamic_type.name
+        assert val.dynamic_type.name.startswith("std::vector<")
 
         self.val = val
-        self.begin = val['_M_impl']['_M_start']
-        self.end = val['_M_impl']['_M_finish']
-        self.size = self.end - self.begin
+        self.begin = val["_M_impl"]["_M_start"]
+        self.end = val["_M_impl"]["_M_finish"]
+        self.size = int(self.end - self.begin)
 
-    def __iter__(self):
+    def __iter__(self) -> StdVectorIterator:
         return StdVectorIterator(self.begin, self.end)
 
-    def prnt(self):
+    def prnt(self) -> None:
         print("size ", self.size)
 
         for i in range(0, self.size - 1):
             print((self.begin + i).dereference().dereference().dynamic_type.name)
 
-    def __str__(self):
-        res = 'vector ' + self.val.dynamic_type.name + '\n'
+    def __str__(self) -> str:
+        assert self.val.dynamic_type.name
+        res = "vector " + self.val.dynamic_type.name + "\n"
         for ii in range(0, self.size):
             element = (self.begin + ii).dereference()
             element_type = element.dynamic_type
 
             if element_type.code == gdb.TYPE_CODE_PTR:
-                res += '[' + str(ii) + '] type = ' + element.dereference().dynamic_type.name + ' *\n'
+                pointed_to = element.dereference()
+                assert pointed_to.dynamic_type.name
+                res += (
+                    "[" + str(ii) + "] type = " + pointed_to.dynamic_type.name + " *\n"
+                )
             else:
-                res += '[' + str(ii) + '] type = ' + element.dynamic_type.name() + '\n'
+                assert element.dynamic_type.name
+                res += "[" + str(ii) + "] type = " + element.dynamic_type.name + "\n"
 
         return res
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: int) -> gdb.Value:
         assert key < self.size
         return (self.begin + key).dereference()
-
-
-# http://stackoverflow.com/questions/7429462/creating-c-string-in-gdb
-def create_std_string(val):
-    res_ptr = gdb.parse_and_eval('(' + std_string_name + '*) malloc(sizeof(' + std_string_name + '))')
-    res = res_ptr.dereference()
-    gdb_hacks.call_method(res, "basic_string")
-    gdb_hacks.call_method_param(res, "assign", '"' + val + '"')
-    return res

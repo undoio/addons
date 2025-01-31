@@ -1,88 +1,149 @@
 # Created by ripopov
-from __future__ import print_function
+# Modified by Undo
 
-import os
-import sys
+import dataclasses
+from pathlib import Path
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import gdb
+from src.udbpy import report
+from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base
+
+from . import sc_design
 
 
-def is_libstdcxx_installed():
-    for pp in gdb.pretty_printers:
+@dataclasses.dataclass
+class SystemcTraceConfig:
+
+    signals_file: Path | None = None
+
+
+_config = SystemcTraceConfig()
+
+
+class Sim:
+
+    def __init__(self, udb: udb_base.Udb) -> None:
+
+        self.udb = udb
+        print("SystemC Full trace")
+
+        with (
+            gdbutils.breakpoints_suspended(),
+            gdbutils.temporary_breakpoints(),
+            self.udb.time.auto_reverting(),
+            gdbio.CollectOutput(),
+            self.udb.replay_standard_streams.temporary_set(False),
+        ):
+            gdb.execute("ugo start")
+            # Intermediate breakpoint at main required for dynamic linking, otherwise
+            # required SystemC symbols won't be found
+            bp_main = gdb.Breakpoint("main")
+            gdb.execute("continue")
+
+            simcontext_ptr = gdb.lookup_symbol("sc_core::sc_curr_simcontext")[0]
+            assert isinstance(simcontext_ptr, gdb.Symbol)
+            self.simctx = simcontext_ptr.value().dereference()
+            bp_main.enabled = False
+
+            bp_start = gdb.Breakpoint("*sc_core::sc_simcontext::prepare_to_simulate")
+
+            gdb.execute("continue")
+            bp_start.enabled = False
+
+            self.design = sc_design.SCModule(self.simctx)
+
+    def do_run_simulation(self, *, trace_file: Path | None = None) -> None:
+        """Run the simulation and extract signals to the specified file."""
+
+        trace_file = trace_file or Path("systemc_trace.vcd")
+        timescale = int(self.simctx["m_time_params"].dereference()["time_resolution"])
+        if _config.signals_file:
+            signals = _config.signals_file.read_text().splitlines()
+            tf = self.design.trace_signals(timescale, trace_file, signals)
+        else:
+            tf = self.design.trace_all(timescale, trace_file)
+
         try:
-            if pp.name.startswith("libstdc++"):
-                return True
-        except AttributeError:
-            pass
-    return False
+            with (
+                gdbutils.breakpoints_suspended(),
+                gdbutils.temporary_breakpoints(),
+                self.udb.time.auto_reverting(),
+            ):
+                gdb.execute("ugo start")
+                bp_trace = gdb.Breakpoint("sc_simcontext::do_timestep")
+                for l in bp_trace.locations:
+                    if l.function and "@plt" in l.function:
+                        l.enabled = False
 
+                while True:
+                    output = gdbutils.execute_to_string("continue")
+                    if "Have reached end of recorded history" in output:
+                        break
+                    tf.collect_now(self.simctx)
 
-print ("SystemC Full trace")
-
-# Check dependencies
-if not is_libstdcxx_installed():
-    raise RuntimeError("STL Pretty printers not installed")
-
-# Command line options
-print_hier = False
-list_signals = False
-signals_file = None
-run_simulation = True
-
-# Check if arguments were passed
-try:
-    print_hier = argdict['print_hier']
-    list_signals = argdict['list_signals']
-    signals_file = argdict['signals_file']
-    if list_signals or print_hier:
-        run_simulation = False
-except NameError:
-    pass
-
-
-# Intermediate breakpoint at main required for dynamic linking, otherwise required systemc symbols won't be found
-bp_main = gdb.Breakpoint("main")
-recording = argdict['recording_file'] is not None
-
-if recording:
-    gdb.execute('continue')
-else:
-    gdb.execute('run')
-
-simctx = gdb.lookup_symbol("sc_core::sc_curr_simcontext")[0].value().dereference()
-bp_main.enabled = False
-
-bp_start = gdb.Breakpoint('*sc_core::sc_simcontext::prepare_to_simulate')
-
-gdb.execute("continue")
-bp_start.enabled = False
-
-
-import sc_design
-
-design = sc_design.SCModule(simctx)
-
-if print_hier:
-    print (design)
-
-if list_signals:
-    print("\nList of all detected signals:\n")
-    design.print_members()
-
-if run_simulation:
-    if signals_file:
-        signals = open(signals_file).read().splitlines()
-        tf = design.trace_signals("systemc_trace", signals, recording=recording)
-    else:
-        tf = design.trace_all("systemc_trace", recording=recording)
-
-    if recording:
-        try:
-            tf.collect(simctx)
         finally:
             tf.done()
-    else:
-        gdb.execute('continue')
 
-sys.exit(0)
+
+command.register_prefix(
+    "systemc",
+    gdb.COMMAND_STATUS,
+    """
+    Commands for working with SystemC recordings.
+    """,
+)
+
+
+@command.register(gdb.COMMAND_STATUS)
+def systemc__print(udb: udb_base.Udb) -> None:
+    """Display the design hierarchy."""
+
+    sim = Sim(udb)
+    print(sim.design)
+
+
+@command.register(gdb.COMMAND_STATUS)
+def systemc__list_signals(udb: udb_base.Udb) -> None:
+    """List all the signals in the design."""
+
+    sim = Sim(udb)
+    print("\nList of all detected signals:\n")
+    sim.design.print_members()
+
+
+@command.register(gdb.COMMAND_STATUS, arg_parser=command_args.Filename(default=None))
+def systemc__run(udb: udb_base.Udb, filename: Path | None) -> None:
+    """Run the simulation and extract signals to the specified file."""
+
+    sim = Sim(udb)
+    sim.do_run_simulation(trace_file=filename)
+
+
+@command.register(gdb.COMMAND_DATA, arg_parser=command_args.Filename())
+def set__signals_file(udb: udb_base.Udb, file: Path) -> None:
+    """
+    Set the file containing a list of signals to trace.
+
+    Usage: set signals-file FILE
+    """
+    _config.signals_file = file
+
+
+@command.register(gdb.COMMAND_DATA)
+def unset__signals_file(udb: udb_base.Udb) -> None:
+    """
+    Unset the currently configured signals file. All signals will be traced.
+    """
+    _config.signals_file = None
+
+
+@command.register(gdb.COMMAND_STATUS)
+def show__signals_file(udb: udb_base.Udb) -> None:
+    """
+    Show the currently configured signals file.
+    """
+
+    if _config.signals_file:
+        report.user(f"signals file: {str(_config.signals_file)!r}")
+    else:
+        report.user("No signals file.")

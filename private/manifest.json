@@ -67,6 +67,16 @@
             "repo": "addons",
             "script": "relative_wallclock/relative_wallclock.py",
             "version_min": "7.0.0"
+        },
+        "systemc-trace": {
+            "description": "Extract waves from a SystemC recording.",
+            "repo": "addons",
+            "script": "systemc_trace/gdb_scripts/run_trace.py",
+            "python_package_deps": [
+                "pyvcd"
+            ],
+            "python_package_dir": "systemc_trace_packages",
+            "version_min": "8.2.0"
         }
     }
 }
