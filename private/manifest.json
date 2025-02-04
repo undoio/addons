@@ -18,6 +18,12 @@
             "script": "reconstruct_file/reconstruct_file.py",
             "version_min": "7.0.0"
         },
+        "rsm": {
+            "description": "Reverse-step and extract maps used in registers.",
+            "repo": "addons",
+            "script": "reverse_step_map/reverse_step_map.py",
+            "version_min": "7.0.0"
+        },
         "ubt": {
             "description": "Adds a ubt command which adds basic block counts to frames within a backtrace.",
             "repo": "addons",

@@ -6,7 +6,6 @@ Contributors: Mark Willamson, Toby Lloyd Davies
 Copyright (C) 2019 Undo Ltd
 """
 
-import tempfile
 import re
 import gdb
 
