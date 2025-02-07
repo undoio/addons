@@ -7,8 +7,8 @@ Currently this script works only on x86 assembly, not ARM.
 Other limitations include:
 
 - not able to calculate the right address with certain addressing modes, for example:
-  (%rax, %rbx, 8)
-- not able to parse xmm* registers: gdb.parse_and_eval() returns an error on such registers.
+  `(%rax, %rbx, 8)`
+- not able to parse `xmm*` registers: gdb.parse_and_eval() returns an error on such registers.
 
 ## Requirements
 
@@ -16,10 +16,9 @@ This command requires another addons command to be present too: `whatmap`
 
 ## Installation
 
-To install this script you only need to source it in udb:
+To install this script you only need to source it in `udb`:
 
 ```
-source waht_map/what_map.py
 source reverse_step_map/reverse_step_map.py
 ```
 

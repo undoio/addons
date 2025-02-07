@@ -27,7 +27,7 @@ def find_map(address):
         if begin <= address < end:
             # For some reason lines returned from info proc mappings start
             # with a newline character
-            return m.group(0).lstrip('\n')
+            return m.group(0).lstrip("\n")
 
     return None
 
@@ -43,22 +43,21 @@ class WhatMapCommand(gdb.Command):
 
     @staticmethod
     def invoke(argument, from_tty):
+        value = gdb.parse_and_eval(argument)
         try:
-            value = gdb.parse_and_eval(argument)
-        except gdb.error:
-            # is this a register?
-            print(f"arg is {argument}")
-            address = int(gdb.selected_frame().read_register(argument))
-        else: 
-            uintptr_type = gdb.lookup_type("unsigned long")
+            address = int(value)
+            if value.type.code == gdb.TYPE_CODE_INT:
+                uintptr_type = gdb.lookup_type("unsigned long")
 
-            if value.address is None:
-                raise gdb.GdbError('Expression "{}" is not addressable.'.format(argument))
+                if value.address is None:
+                    raise gdb.GdbError(f"Expression '{argument}' is not addressable.")
 
-            # For a value that has an address within the program, we can look up
-            # that address within the maps.
-            # This allows the user to e.g. just specify a variable name.
-            address = int(value.address.cast(uintptr_type))
+                # For a value that has an address within the program, we can look up
+                # that address within the maps.
+                # This allows the user to e.g. just specify a variable name.
+                address = int(value.address.cast(uintptr_type))
+        except gdb.MemoryError:
+            address = int(value.address)
 
         print(f"Searching maps for address 0x{address:x}:")
         _map = find_map(address)

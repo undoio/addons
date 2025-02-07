@@ -18,8 +18,8 @@
             "script": "reconstruct_file/reconstruct_file.py",
             "version_min": "7.0.0"
         },
-        "rsm": {
-            "description": "Reverse-step and extract maps used in registers.",
+        "reverse-step-maps": {
+            "description": "Provides a mean to quickly get an understanding of instructions and maps used at the same time",
             "repo": "addons",
             "script": "reverse_step_map/reverse_step_map.py",
             "version_min": "7.0.0"
