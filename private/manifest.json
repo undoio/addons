@@ -4,7 +4,8 @@
             "description": "Show changes to local variables as they happen.",
             "repo": "addons",
             "script": "value_tracer/value_tracer.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "Show variable changes during execution.\n\n\nvalue-tracer OP -- See the variable changes if OP (e.g. 'next') is executed.\n\nvalue-tracer-function -- Show execution history of current function with variable changes.\n\nvalue-tracer-inline -- Show execution history of current function with inline annotations.\n\nset value-tracer-inline-references -- Set whether all uses of a variable are annotated."
         },
         "load-all-symbols": {
             "description": "Search a directory tree for debug symbols.",
