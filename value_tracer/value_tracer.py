@@ -1,12 +1,9 @@
 
 import re
 import gdb
-from addons.utils import locate_api
-locate_api()
+
 from src.udbpy import report, termstyles
 from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base
-from undo.debugger_extensions import udb
-udb = udb._wrapped_udb  # pylint: disable=protected-access,redefined-outer-name
 
 def _get_block_vars(frame: gdb.Frame, block: gdb.Block) -> dict[str, gdb.Value]:
     """Fetch all variable values for the given block."""
@@ -67,8 +64,8 @@ def value_tracer_next(udb: udb_base.Udb) -> None:
     Report variable changes as a result of running the current line.
     """
 
-    # TODO: consider allowing user to specify command name
-    # TODO: consider how to hook onto other commands
+    # TODO: consider allowing user to specify command name iso assuming "next"
+    # TODO: consider how to use as hook vs standalone command
 
     with (
         gdbutils.breakpoints_suspended(),
@@ -131,6 +128,20 @@ def value_tracer(udb: udb_base.Udb, cmd: str) -> None:
     """
     _execution_op_with_locals(cmd)
 
+def _start_of_function(udb: udb_base.Udb) -> None:
+    with (
+        gdbutils.breakpoints_suspended(),
+        gdbutils.temporary_breakpoints(),        
+        udb.replay_standard_streams.temporary_set(False),
+        gdbio.CollectOutput(),
+    ):
+        if gdbutils.selected_frame().older():
+            udb.execution.reverse_finish(cmd="value-tracer-function")
+            udb.execution.step()
+        else:
+            # outermost frame
+            gdb.Breakpoint(gdbutils.selected_frame().name())
+            udb.execution.reverse_cont()
 
 @command.register(
     gdb.COMMAND_STATUS,
@@ -145,13 +156,7 @@ def value_tracer_function(udb: udb_base.Udb) -> None:
         gdbutils.temporary_parameter("print frame-info", "source-line"),
     ):
         # Find start of function
-        with (
-            gdbutils.breakpoints_suspended(),
-            udb.replay_standard_streams.temporary_set(False),
-            gdbio.CollectOutput(),
-        ):
-            udb.execution.reverse_finish(cmd="auto-locals-function")
-            udb.execution.step()
+        _start_of_function(udb)
 
         # Step through function
         frame = gdbutils.newest_frame()
@@ -180,13 +185,7 @@ def value_tracer_inline(udb: udb_base.Udb) -> None:
         gdbutils.temporary_parameter("print frame-info", "source-line"),
     ):
         # Find start of function
-        with (
-            gdbutils.breakpoints_suspended(),
-            udb.replay_standard_streams.temporary_set(False),
-            gdbio.CollectOutput(),
-        ):
-            udb.execution.reverse_finish(cmd="auto-locals-function")
-            udb.execution.step()
+        _start_of_function(udb)
 
         # Step through function
         frame = gdbutils.newest_frame()
@@ -202,17 +201,19 @@ def value_tracer_inline(udb: udb_base.Udb) -> None:
 
             for name, value in _get_local_vars().items():
                 tag = termstyles.ansi_format(f"«{value}»", intensity=termstyles.Intensity.DIM)
+                # Match "foo", but not "bar.foo", "food", "otherfoo"
+                # TODO: Fails to match in the case of "if (bar>foo)"
+                # TODO: Can treesitter or similar be used to parse the line?
+                variable_re = fr"(?<!\.|\>)\b(?P<orig>\s*{name})\b"
                 if show_references:
-                    # Match "foo", but not "bar.foo", "food", "otherfoo"
-                    # FIXME: Fails to match in the case of "if (bar>foo)"
-                    # TODO: Can treesitter or similar be used to parse the line?
-                    annotate_re =  fr"(?<!\.|\>|[a-zA-Z0-9_])(?P<orig>\s*{name})(?![a-zA-Z0-9_])"
-                    annotate_lambda = lambda m: f"{m['orig']} {tag}"
+                    code_line = re.sub(variable_re, lambda m: f"{m['orig']} {tag}", code_line)
                 else:
-                    # The RE aims to recognise "foo=", but not "bar->foo=" or "foo=="
-                    annotate_re =  fr"(?<!\.|\>)(?P<orig>\s*{name})\s*=(?!=)"
-                    annotate_lambda = lambda m: f"{m['orig']} {tag} ="
-                code_line = re.sub(annotate_re, annotate_lambda, code_line)
+                    # The RE aims to recognise "foo=", "foo +=" etc
+                    # but not "bar->foo=" or "foo=="
+                    code_line = re.sub(
+                        variable_re + fr"\s*(?P<op>\+|\-|\*|\/|%|\&|\||\<\<|\>\>|\^)?=(?!=)",
+                        lambda m: f"{m['orig']} {tag} {m['op'] or ''}=",
+                        code_line)
             report.user(code_line)
 
         report.user("        }")
