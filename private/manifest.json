@@ -1,5 +1,11 @@
 {
     "udb_addons": {
+        "value-tracer": {
+            "description": "Show changes to local variables as they happen.",
+            "repo": "addons",
+            "script": "value_tracer/value_tracer.py",
+            "version_min": "7.0.0"
+        },
         "load-all-symbols": {
             "description": "Search a directory tree for debug symbols.",
             "repo": "addons",
