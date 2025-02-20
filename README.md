@@ -13,16 +13,16 @@ Summary
 [**Automatic symbol loading**](automatic_symbol_loading/README.md)
 Loads all debug files in the specified directory.
 
-[**Backtrace with time**](backtrace_with_time/README.md)  
+[**Backtrace with time**](backtrace_with_time/README.md)
 Adds a ubt command which adds basic block counts to frames within a backtrace.
 
-[**Bookmarks recreate**](bookmarks_recreate/README.md)  
-Save and restore bookmarks to and from a file.
-
-[**Completion**](completion/README.md)  
+[**Completion**](completion/README.md)
 Adds completion of udb command line parameters in bash.
 
-[**Follow fork**](follow_fork/README.md)  
+[**Count calls**](count_calls/README.md)
+Counts how many times each function was called in the specificed period of time.
+
+[**Follow fork**](follow_fork/README.md)
 Allows live-record to record both parent and child after `fork()` has been called.
 
 [**Load Debug Symbols**](load_debug_symbols/README.md)
@@ -32,13 +32,20 @@ Loads debug symbols by parsing the relevant section addresses.
 Reconstructs the content of a file by analysing reads on the execution history
 of a debugged program or LiveRecorder recording.
 
-[**Regs every bb**](regs_every_bb/README.md)  
+[**Regs every bb**](regs_every_bb/README.md)
 Prints the values of all the registers at every basic block within a range.
 
-[**Sample functions**](sample_functions/README.md)  
+[**Relative wallclock**](relative_wallclock/README.md)
+Prints an approximate wallclock time relative to the start of recording.
+
+[**Reverse step map**](reverse_step_map/README.md)
+Executes a reverse-step-instruction, prints the instruction and, for each
+register used in it, prints which map is involved.
+
+[**Sample functions**](sample_functions/README.md)
 Samples the number of times the program is in each function.
 
-[**What map**](what_map/README.md)  
+[**What map**](what_map/README.md)
 Looks up a variable or address within the maps of the debuggee.
 
 [**Google Test annotations**](gtest_annotations/README.md)
