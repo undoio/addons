@@ -40,7 +40,7 @@ Fixed-point datatypes are not supported yet
     ```
     $ udb examples/sysc/risc_cpu/risc_cpu.undo
     [...]
-    end 1,837,898> extend systemc_trace
+    end 1,837,898> extend systemc-trace
     Updating repo cache...
     ...done.
     Installing third-party Python packages...
