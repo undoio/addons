@@ -5,55 +5,63 @@
             "repo": "addons",
             "script": "value_tracer/value_tracer.py",
             "version_min": "7.0.0",
-            "help": "Show variable changes during execution.\n\n\nvalue-tracer OP -- See the variable changes if OP (e.g. 'next') is executed.\n\nvalue-tracer-function -- Show execution history of current function with variable changes.\n\nvalue-tracer-inline -- Show execution history of current function with inline annotations.\n\nset value-tracer-inline-references -- Set whether all uses of a variable are annotated."
+            "help": "Show variable changes during execution.\n\n\nvalue-tracer OP -- See the variable changes if OP (e.g. \"next\") is executed.\n\nvalue-tracer-function -- Show execution history of current function with variable changes.\n\nvalue-tracer-inline -- Show execution history of current function with inline annotations.\n\nset value-tracer-inline-references -- Set whether all uses of a variable are annotated."
         },
         "load-all-symbols": {
             "description": "Search a directory tree for debug symbols.",
             "repo": "addons",
             "script": "automatic_symbol_loading/automatic_symbol_loading.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "Locate debug symbol files for the current recording.\n\n\nload-all-symbols DIRECTORY -- Recursively search DIRECTORY for relevant .debug files.\n\n\nFor each library loaded, UDB searches for a debug information file (.debug) with matching build ID."
         },
         "load-debug-symbols": {
             "description": "Add a debuginfo file.",
             "repo": "addons",
             "script": "load_debug_symbols/load_debug_symbols.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "Add a debug information file.\n\n\nload-debug-symbols FILE -- Load debug information from FILE."
         },
         "reconstruct-file": {
             "description": "Reconstruct a file from writes to a file descriptor.",
             "repo": "addons",
             "script": "reconstruct_file/reconstruct_file.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "Regenerate the content of a file that the debuggee read.\n\n\nType \"help reconstruct-file\" for usage information."
         },
         "reverse-step-maps": {
             "description": "Provides a mean to quickly get an understanding of instructions and maps used at the same time",
             "repo": "addons",
             "script": "reverse_step_map/reverse_step_map.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "NOTE: this addon requires the \"whatmap\" addon to be installed.\n\nNOTE: x86 only.\n\n\nrsm -- Identify memory maps used by the current instruction"
         },
         "ubt": {
             "description": "Adds a ubt command which adds basic block counts to frames within a backtrace.",
             "repo": "addons",
             "script": "backtrace_with_time/backtrace_with_time.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "ubt -- Backtrace with basic block counts."
         },
         "uregs": {
             "description": "Prints the values of all the registers at every basic block within a range.",
             "repo": "addons",
             "script": "regs_every_bb/regs_every_bb.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "uregs START_TIME END_TIME -- Sample register state at every basic block."
         },
         "usample": {
             "description": "Sampler which counts the number of times we find ourselves in a particular function.",
             "repo": "addons",
             "script": "sample_functions/sample_functions.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "usample START_TIME END_TIME STEP [FILENAME] -- Sample the function call stack."
         },
         "whatmap": {
             "description": "Looks up a variable or address within the maps of the debuggee.",
             "repo": "addons",
             "script": "what_map/what_map.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "whatmap EXPRESSION -- Locate memory map containing EXPRESSION.\n\n\nExamples:\n\nwhatmap my_variable: looks up the map where my_variable is stored.\n\nwhatmap *0x1234: looks up the map containing the address 0x1234."
         },
         "altui": {
             "description": "Altui provides a modern and user-friendly alternative to plain UDB and to TUI mode.",
@@ -79,7 +87,8 @@
             "description": "info wallclock-relative command to get wallclock time relative to the start of recording.",
             "repo": "addons",
             "script": "relative_wallclock/relative_wallclock.py",
-            "version_min": "7.0.0"
+            "version_min": "7.0.0",
+            "help": "info-wallclock-relative -- Print wallclock time offset from start of recording."
         },
         "systemc-trace": {
             "description": "Extract waves from a SystemC recording.",
