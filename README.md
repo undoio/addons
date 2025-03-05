@@ -28,6 +28,9 @@ Allows live-record to record both parent and child after `fork()` has been calle
 [**Load Debug Symbols**](load_debug_symbols/README.md)
 Loads debug symbols by parsing the relevant section addresses.
 
+[**Malloc Free Check**](malloc_free_check/README.md)
+Checks that no memory was leaked in your program by tracking calls to `malloc()` and `free()`.
+
 [**Reconstruct file**](reconstruct_file/README.md)
 Reconstructs the content of a file by analysing reads on the execution history
 of a debugged program or LiveRecorder recording.
