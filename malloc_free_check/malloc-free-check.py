@@ -14,7 +14,7 @@ import textwrap
 from undo.udb_launcher import REDIRECTION_COLLECT, UdbLauncher
 
 
-def main(argv):
+def main(argv: list[str]) -> None:
     # Get the arguments from the command line.
     try:
         recording = argv[1]
@@ -34,7 +34,7 @@ def main(argv):
     # to the user but, in case of errors, we want to display it.
     res = launcher.run_debugger(redirect_debugger_output=REDIRECTION_COLLECT)
 
-    if res.exit_code == 0:
+    if not res.exit_code:
         # All good as UDB exited with exit code 0 (i.e. no errors).
         # The result_data attribute is used to pass information from the extension to this script.
         unmatched = res.result_data["unmatched"]

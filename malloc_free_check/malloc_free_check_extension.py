@@ -16,7 +16,7 @@ from undodb.debugger_extensions import udb
 from undodb.debugger_extensions.debugger_io import redirect_to_launcher_output
 
 
-def leak_check():
+def leak_check() -> None:
     """
     Implements breakpoints and stops on all calls to malloc() and free(), capturing the
     timestamp, size and returned pointer for malloc(), then confirms the address pointer is later
@@ -83,15 +83,14 @@ def leak_check():
             else:
                 print("--- INFO: Free called with null address")
 
-            #with redirect_to_launcher_output():
+            # with redirect_to_launcher_output():
             print(f"{time}: free() called for {int(addr):#x}")
-
 
     # If Allocations has any entries remaining, they were not released.
     with redirect_to_launcher_output():
-        print ()
-        print (f"{len(allocations)} unmatched memory allocation(s):")
-        print ()
+        print()
+        print(f"{len(allocations)} unmatched memory allocation(s):")
+        print()
 
         total = 0
 
@@ -124,7 +123,7 @@ def leak_check():
 
 # UDB will automatically load the modules passed to UdbLauncher.add_extension and, if present,
 # automatically execute any function (with no arguments) called "run".
-def run():
+def run() -> None:
     # Needed to allow GDB to fixup breakpoints properly after glibc has been loaded
     gdb.Breakpoint("main")
 
