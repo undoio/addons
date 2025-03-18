@@ -99,6 +99,13 @@
             ],
             "python_package_dir": "systemc_trace_packages",
             "version_min": "8.2.0"
+        },
+        "malloc-free-check": {
+            "description": "Tool for detecting memory leaks based on malloc and free calls.",
+            "repo": "addons",
+            "script": "malloc_free_check/install.py",
+            "version_min": "8.3.0",
+            "help": "malloc-free.py -- Check for memory leaks based on malloc and free calls."
         }
     }
 }
