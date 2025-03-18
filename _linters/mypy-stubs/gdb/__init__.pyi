@@ -217,7 +217,7 @@ class Breakpoint(object):
     commands: Optional[str]
     def __init__(
         self,
-        spec: str,
+        spec: str = ...,
         type: gdbtypes.BreakpointType = ...,
         wp_class: gdbtypes.WatchPointType = ...,
         internal: bool = ...,
@@ -232,7 +232,8 @@ class Breakpoint(object):
     def is_valid(self) -> bool: ...
     def delete(self) -> None: ...
 
-class FinishBreakpoint(Breakpoint): ...
+class FinishBreakpoint(Breakpoint):
+    return_value: Optional[Value]
 
 class Symbol(object):
     type: Type

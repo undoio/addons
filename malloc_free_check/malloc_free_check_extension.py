@@ -16,7 +16,7 @@ from undodb.debugger_extensions import udb
 from undodb.debugger_extensions.debugger_io import redirect_to_launcher_output
 
 
-def leak_check() -> None:
+def leak_check() -> int:
     """
     Implements breakpoints and stops on all calls to malloc() and free(), capturing the
     timestamp, size and returned pointer for malloc(), then confirms the address pointer is later
@@ -24,6 +24,8 @@ def leak_check() -> None:
 
     If a subsequent free() is not seen, then at the end of execution, output the timestamp and
     details of the memory which was never freed.
+
+    Returns the number of unmatched allocations found.
     """
     # Set a breakpoint for the specified function.
     gdb.Breakpoint("malloc")
@@ -53,16 +55,17 @@ def leak_check() -> None:
 
             # For now, capture the timestamp and size of memory requested.
             time = udb.time.get()
-            size = gdb.parse_and_eval("$rdi")
+            size = int(gdb.parse_and_eval("$rdi"))
 
             gdb.execute("continue")
 
             # Should stop at the finish breakpoint, so capture the pointer.
-            addr = mfbp.return_value
+            assert mfbp.return_value is not None, "Expected to see a return value."
+            addr = int(mfbp.return_value)
 
             if addr:
                 # Store details in the dictionary.
-                allocations[format(addr)] = time, size
+                allocations[hex(addr)] = time, size
             else:
                 print(f"-- INFO: Malloc called for {size} byte(s) but null returned.")
 
@@ -70,21 +73,21 @@ def leak_check() -> None:
 
         elif re.search("free", mypc):
             # In free(), get the pointer address.
-            addr = gdb.parse_and_eval("$rdi")
+            addr = int(gdb.parse_and_eval("$rdi"))
 
             time = udb.time.get()
 
             # Delete entry from the dictionary as this memory was released.
             if addr > 0:
-                if allocations[hex(int(format(addr)))]:
-                    del allocations[hex(int(format(addr)))]
+                if allocations[hex(addr)]:
+                    del allocations[hex(addr)]
                 else:
                     print("--- INFO: Free called with unknown address")
             else:
                 print("--- INFO: Free called with null address")
 
             # with redirect_to_launcher_output():
-            print(f"{time}: free() called for {int(addr):#x}")
+            print(f"{time}: free() called for {addr:#x}")
 
     # If Allocations has any entries remaining, they were not released.
     with redirect_to_launcher_output():
@@ -96,11 +99,10 @@ def leak_check() -> None:
 
         # Increase the amount of source from default (10) to 16 lines for more context.
         gdb.execute("set listsize 16")
-        for addr in allocations:
-            time, size = allocations[addr]
+        for location, (time, size) in allocations.items():
             total += size
             print("===============================================================================")
-            print(f"{time}: {size} bytes was allocated at {addr}, but never freed.")
+            print(f"{time}: {size} bytes was allocated at {location}, but never freed.")
             print("===============================================================================")
             udb.time.goto(time)
             print("Backtrace:")
@@ -124,10 +126,10 @@ def leak_check() -> None:
 # UDB will automatically load the modules passed to UdbLauncher.add_extension and, if present,
 # automatically execute any function (with no arguments) called "run".
 def run() -> None:
-    # Needed to allow GDB to fixup breakpoints properly after glibc has been loaded
+    # Needed to allow GDB to fixup breakpoints properly after glibc has been loaded.
     gdb.Breakpoint("main")
 
     unmatched = leak_check()
 
-    # Pass the number of time we hit the breakpoint back to the outer script.
+    # Pass the number of unmatched allocations back to the outer script.
     udb.result_data["unmatched"] = unmatched
