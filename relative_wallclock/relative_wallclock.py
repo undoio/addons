@@ -9,6 +9,30 @@ from undo.debugger_extensions import (
 )
 
 
+def str_to_delta(wallclock: str) -> datetime.timedelta:
+    """
+    Converts a string from `info wallclock` or `info wallclock-extent` into a datetime.timedelta.
+    Accepts strings in the format H:M:S.microsecond used by Undo 8.2, and %H:%M:%S used by
+    info wallclock-extent in earlier versions.
+    """
+    try:
+        # Undo 8.2 and later
+        # e.g. 2024-07-16T11:39:39.888096Z
+        t = datetime.datetime.strptime(wallclock, "%H:%M:%S.%f")
+    except ValueError:
+        # Undo earlier than 8.2.
+        # e.g. 2024-07-02T12:28:33Z
+        t = datetime.datetime.strptime(wallclock, "%H:%M:%S")
+
+    delta = datetime.timedelta(
+        hours=t.hour,
+        minutes=t.minute,
+        seconds=t.second,
+        microseconds=t.microsecond,
+    )
+    return delta
+
+
 class WallclockRelative(gdb.Command):
     """
     Adds an info wallclock-relative command which prints the approximate wallclock
@@ -21,30 +45,20 @@ class WallclockRelative(gdb.Command):
 
     def invoke(self, arg, from_tty):
         extents = debugger_utils.execute_to_string("info wallclock-extent")
-        m = re.search("Start time: (.*)", extents)
+        m = re.search("Start time: .*T(.*)Z", extents)
         if not m:
             raise gdb.GdbError("Could not determine start time.")
 
-        # e.g. 2024-07-02T12:28:33Z
-        start_time = datetime.datetime.strptime(m[1], "%Y-%m-%dT%H:%M:%SZ")
-        start_delta = datetime.timedelta(
-            hours=start_time.hour,
-            minutes=start_time.minute,
-            seconds=start_time.second,
-        )
+        start_delta = str_to_delta(m[1])
+
         current = debugger_utils.execute_to_string("info wallclock")
         # e.g. 2024-07-16T11:39:39.888096Z (approximate)
         m = re.search("T(.*)Z", current)
         if not m:
             raise gdb.GdbError("Could not determine current time.")
 
-        current_time = datetime.datetime.strptime(m[1], "%H:%M:%S.%f")
-        current_delta = datetime.timedelta(
-            hours=current_time.hour,
-            minutes=current_time.minute,
-            seconds=current_time.second,
-            microseconds=current_time.microsecond,
-        )
+        current_delta = str_to_delta(m[1])
+
         relative_delta = current_delta - start_delta
         print(f"Relative: {relative_delta}")
 
