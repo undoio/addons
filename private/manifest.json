@@ -108,6 +108,7 @@
 		"mcp[cli]"
 	    ],
 	    "python_package_dir": "mcp_server_packages",
-	    "version_min": "8.2.0",
+	    "version_min": "8.2.0"
+	}
     }
 }

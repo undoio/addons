@@ -4,7 +4,7 @@ import inspect
 import gdb
 from mcp.server.fastmcp import FastMCP
 
-from . import command, gdbio, gdbutils, udb_base, udb_last
+from src.udbpy.gdb_extensions import command, gdbio, gdbutils, udb_base, udb_last
 
 
 INSTRUCTIONS = """
@@ -36,11 +36,6 @@ history.  If the user managed to record their bug this means you have stepped pa
 another approach.
 
 Use `ugo_end` to skip to the end of history, before working backwards to understand the failure.
-
-Use `ugo_start` only if you want to debug forwards through recorded history.
-
-Prefer navigating backwards to forwards.  Do not try to step through from the
-start of the main function.
 
 ## Navigating the stack
 
@@ -117,9 +112,8 @@ investigating.  "Now" is the previous value, which should be ignored or used
 for a new debugging hypothesis.
 
 `last` will only work for values that are currently in scope.  If a value is not
-currently in scope then you need to navigate backwards in time until it is.
-
-Using `reverse_step`, `reverse_next` and `reverse_finish` can help you work
+currently in scope then you need to navigate backwards in time until it is.  Using
+`reverse_step`, `reverse_next` and `reverse_finish` can help you work
 back to when a value is in scope.
 
 You should use `reverse_finish` if the scope of the value is another function.
@@ -175,17 +169,33 @@ To diagnose the bug follow the following procedure:
  3. Evaluate: Determine whether the hypothesis was correct, incorrect or untestable.
  4a. If the bug has been root caused, report to the user.
  4b. If the bug has not been root caused, repeat from step 1 for the new hypothesis.
-
-Call the heuristic tools to determine a strategy.
-
-Your response: You should iterate through the above steps repeatedly until you
-have identified a root cause for the bug.
 """
 
 
-SOURCE_CONTEXT = 5
+def collect_output(fn):
+    """
+    Collect GDB's output during the execution of the wrapped function.
+
+    Used to pass back interactive output directly to the LLM.
+    """
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        with gdbio.CollectOutput() as collector:
+            fn(*args, **kwargs)
+
+        return collector.output
+
+    return wrapped
+
+
+SOURCE_CONTEXT_LINES = 5
+"""The maximum size of source context to show either side of the current position."""
+
 
 def get_context(fname, line):
+    """
+    Return formatted file context surrounding the current debug location.
+    """
     lines = open(fname).readlines()
 
     start_line = max(0, line - SOURCE_CONTEXT)
@@ -197,17 +207,13 @@ def get_context(fname, line):
     return "\n".join(formatted_lines)
 
 
-def collect_output(fn):
-    @functools.wraps(fn)
-    def wrapped(*args, **kwargs):
-        with gdbio.CollectOutput() as collector:
-            fn(*args, **kwargs)
-
-        return collector.output
-
-    return wrapped
-
 def source_context(fn):
+    """
+    Add source location context to the result of a wrapped function.
+
+    This informs the LLM of the current source context when the command returns, useful when a
+    command moves through debug history.
+    """
     @functools.wraps(fn)
     def wrapped(*args, **kwargs):
         out = fn(*args, **kwargs)
@@ -226,7 +232,14 @@ def source_context(fn):
 
     return wrapped
 
+
 def chain_of_thought(fn):
+    """
+    Add chain-of-thought parameters and documentation to the wrapped function.
+
+    This requires the LLM to explain its reasoning as it goes along, leading to better or more
+    understandable results.
+    """
     @functools.wraps(fn)
     def wrapped(self, theory: str, hypothesis: str, *args, **kwargs):
         return fn(self, *args, **kwargs)
@@ -234,14 +247,13 @@ def chain_of_thought(fn):
     sig = inspect.signature(fn)
     params = list(sig.parameters.values())
     params += [inspect.Parameter(param, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str)
-               for param in ("theory", "hypothesis")]
+               for param in ("hypothesis",)]
         
     wrapped.__signature__ = sig.replace(parameters=params)
 
     wrapped.__doc__ += """
         Additional parameters:
-        theory -- describe your top-level theory for why the program failed.
-        hypothesis -- describe the hypothesis you are currently investigating within that theory.
+        hypothesis -- describe the hypothesis you are currently investigating.
     """
 
     return wrapped
@@ -254,18 +266,13 @@ class UdbMcpGateway:
 
         self._register_tools()
 
+
     def _register_tools(self) -> None:
         for name, fn in inspect.getmembers(self, inspect.ismethod):
             if not name.startswith("tool_"):
-                print(f"Not registering {name}")
                 continue
-            if "heuristic" in name:
-                print(f"Skipping heuristic: {name}")
-                continue
-            print(f"Registering {name}")
-            print(f"Docstring:\n{fn.__doc__}")
-            print(f"Signature: {inspect.signature(fn)}")
             self.mcp.add_tool(fn=fn, name=name.removeprefix("tool_"), description=fn.__doc__)
+
 
     @chain_of_thought
     def tool_get_time(self) -> str:
@@ -274,15 +281,6 @@ class UdbMcpGateway:
         """
         return str(self.udb.time.get())
 
-    # def tool_ugo_start(self) -> str:
-    #     """
-    #     Return to the start of the recording.
-
-    #     You only need this if you are going to debug forwards, which you should not normally prefer.
-    #     """
-    #     with gdbio.CollectOutput() as collector:
-    #         self.udb.time.goto_start()
-    #         return collector.output
 
     @source_context
     @collect_output
@@ -315,13 +313,6 @@ class UdbMcpGateway:
             expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
         )
 
-    # def tool_next(self) -> str:
-    #     """
-    #     Run forwards to the next line of source code, stepping over function calls.
-    #     """
-    #     with gdbio.CollectOutput() as collector:
-    #         self.udb.execution.next()
-    #         return collector.output
 
     @source_context
     @collect_output
@@ -335,10 +326,6 @@ class UdbMcpGateway:
         """
         self.udb.execution.reverse_next(cmd="reverse-next")
 
-    # def tool_finish(self) -> str:
-    #     with gdbio.CollectOutput() as collector:
-    #         self.udb.execution.finish()
-    #         return collector.output
 
     @source_context
     @collect_output
@@ -349,10 +336,6 @@ class UdbMcpGateway:
         """
         self.udb.execution.reverse_finish(cmd="reverse-finish")
 
-    # def tool_step(self) -> str:
-    #     with gdbio.CollectOutput() as collector:
-    #         self.udb.execution.step()
-    #         return collector.output
 
     @source_context
     @collect_output
@@ -405,11 +388,7 @@ class UdbMcpGateway:
         Params:
         intended_function: the function you want to step into
         """
-#        time_before = self.udb.time.get()
         self.udb.execution.reverse_step(cmd="reverse-step")
-#        if gdb.selected_frame().name != intended_function:
-#            self.udb.time.goto(time_before)
-#            raise Exception("You have not stepped into function {intended_function}. The effects of this command have been undone.")
 
     @chain_of_thought
     def tool_backtrace(self) -> str:
@@ -417,142 +396,6 @@ class UdbMcpGateway:
         Get a backtrace of the code at the current point in time.
         """
         return gdbutils.execute_to_string("backtrace")
-
-    @chain_of_thought
-    def tool_heuristic_the_application_called_abort(self) -> str:
-        """
-        Heuristic for when the application called abort.
-        """
-        return """
-            When the application has called abort, try the following procedure:
-            
-             1. Verify: Check that the `backtrace` is consistent with `abort()` being called.
-             2. Announce: State to the user that you are investigating an `abort()`.
-             3. Search: Use `reverse_finish` repeatedly until the session has moved out of library code and into user code.
-             4. Verify: Confrim that the current line of code is the `abort()` call.
-             5. Investigate further: Investigate how we arrived at the `abort()` statement to understand why we failed.  To do this, *get back to an earlier line in the code*.
-             6. Report: Explain why the `abort()` was reached.
-        """
-
-    @chain_of_thought
-    def tool_heuristic_an_assertion_has_failed(self) -> str:
-        """
-        Heuristic for when an assertion has failed.
-        """
-        return """
-            When an assertion has failed, try the following procedure:
-            
-             1. Verify: Check the assertion message that was printed (if any).  Check that the current `backtrace` is consistent with an assertion failure.
-             2. Announce: State to the user that you are investigating an assertion failure.
-             3. Search: Use `reverse_finish` repeatedly until the session has moved out of library code and into user code.
-             4. Verify: Confirm that the current line of code is the assertion failure.
-             5. Investigate further: Investigate the unexpected values checked by the assertion to understand why it failed.  To do this, investigate the *variables with unexpected values*.
-             6. Report: Explain why the assertion failure occurred.
-        """
-
-    @chain_of_thought
-    def tool_heuristic_a_variable_has_an_unexpected_value(self) -> str:
-        """
-        Heuristic for when a variable has an unexpected value.
-        """
-        return """
-            When a variable has an unexpected value, try the following procedure:
-            
-             1. Verify: `get_value` to confirm the current value is an expected value
-             2. Announce: State to the user that you are investigating a bad value.
-             3. Search: `last` to find where that value was set
-             4a. Investigate further: If the value was set to a value returned by a function, investigate how that function returned the unexpected result.  To do this investigate why *a function returned an unexpected result*.
-             4b. Report: If the value was set using a logical or arithmetic expression (not a function call) then you have identified the source of the bad value.  Report this.
-        """
-
-    @chain_of_thought
-    def tool_heuristic_a_function_has_returned_an_unexpected_result(self) -> str:
-        """
-        Heuristic for when a function has returned an unexpected result.
-        """
-        return """
-            When a function has an unexpected return value, try the following procedure:
-
-             1. Verify position: check that you are immediately after the most recent call to the function by looking at the source location.
-             2. Announce: State to the user that you're investigating an unexpected function return value.
-             3. Verify value: Use `get_value` on the variable its return value was stored into to verify it contains the unexpected value.
-             4. Search: Use `reverse_step` to run backwards into the function and find its `return` statement.
-             5. Report: Use `get_value` if necessary to show the value being returned and report that this is its source.
-            """
-
-    @chain_of_thought
-    def tool_heuristic_get_back_to_an_earlier_line_in_the_code(self) -> str:
-        """
-        Heuristic to return to an earlier line in the code.
-        """
-        return """
-            To return to an earlier line of code in the execution history, try the following procedure:
-            
-             1. Verify: Verify that we are not already at the line of interest.
-             2. Announce: State to the user that you are trying to return to an earlier line of code.
-             3. Search: If the line is within the current scope, use `reverse_next`.  If the line is not in the current scope, use `reverse_finish`.  Repeat as necessary.
-             5. Verify result: Verify that we have reached the line of interest, for instance the site of a function call or return.
-             6. Report: Report that we have reached the desired line of interest.
-        """
-
-    @chain_of_thought
-    def tool_heuristic_found_the_bug(self) -> str:
-        """
-        Heuristic to use when you believe you've found the bug.
-        """
-        return """
-            When you believe you have found the bug, try the following procedure:
-
-             1. Verify: Consider the information have gathered, step-by-step.  Is it consistent with your conclusion?
-             2. Correct: Update your conclusions based on any inconsistencies.  If necessary, repeat your investigation.
-             3. Report: Report that you have found the bug, summarising your findings.
-        """
-
-    # def tool_continue_to_call(self, function_name: str) -> str:
-    #     """
-    #     Run forwards to the next time a function is executed.
-    #     """
-    #     with (
-    #         gdbio.CollectOutput() as collector,
-    #         gdbutils.breakpoints_suspended(),
-    #         gdbutils.temporary_breakpoints(),
-    #     ):
-    #         bp = gdb.Breakpoint(function_name, internal=True)
-    #         while not bp.hit_count:
-    #             self.udb.execution.cont()
-    #         return collector.output
-
-    # def tool_reverse_to_start_of_last_call(self, function_name: str) -> str:
-    #     """
-    #     Run backwards to the last time a function was executed.
-    #     """
-    #     with (
-    #         gdbio.CollectOutput() as collector,
-    #         gdbutils.breakpoints_suspended(),
-    #         gdbutils.temporary_breakpoints(),
-    #     ):
-    #         bp = gdb.Breakpoint(function_name, internal=True)
-    #         while not bp.hit_count:
-    #             self.udb.execution.reverse_cont()
-    #         return collector.output
-
-    # def tool_reverse_to_return_of_last_call(self, function_name: str) -> str:
-    #     """
-    #     Run backwards to the last time a function returned.
-
-    #     You can enter the function's return path by running reverse_step after this.
-    #     """
-    #     with (
-    #         gdbio.CollectOutput() as collector,
-    #         gdbutils.breakpoints_suspended(),
-    #         gdbutils.temporary_breakpoints(),
-    #     ):
-    #         bp = gdb.Breakpoint(function_name, internal=True)
-    #         while not bp.hit_count:
-    #             self.udb.execution.reverse_cont()
-    #         bp.delete()
-    #         self.udb.execution.finish()
-    #         return collector.output
 
     @chain_of_thought
     def tool_get_value(self, expression: str) -> str:
