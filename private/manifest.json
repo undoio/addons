@@ -99,6 +99,17 @@
             ],
             "python_package_dir": "systemc_trace_packages",
             "version_min": "8.2.0"
-        }
+        },
+	"explain": {
+	    "description": "Integrate Undo debug functionality using an MCP server.",
+	    "repo": "addons",
+	    "script": "explain/explain.py",
+	    "python_package_deps": [
+		"mcp[cli]",
+		"exceptiongroup"
+	    ],
+	    "python_package_dir": "explain_packages",
+	    "version_min": "8.2.0"
+	}
     }
 }
