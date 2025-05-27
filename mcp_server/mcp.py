@@ -239,6 +239,9 @@ class UdbMcpGateway:
         This should NOT be used with function call expressions e.g. my_function(number) as
         it will be very slow.
 
+        This should NOT be used for address-taken expressions, such as &variable_name, since this
+        will be very slow and won't give a meaningful answer.
+
         Use expressions that are based solely on variables or memory locations.
         """
         self.udb.last.execute_command(
