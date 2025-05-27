@@ -190,7 +190,7 @@ class UdbMcpGateway:
     def __init__(self, udb: udb_base.Udb):
         self.udb = udb
         self.mcp = FastMCP("UDB_Server", instructions=MCP_INSTRUCTIONS, log_level=LOG_LEVEL)
-        self.tools = []
+        self.tools: list[Callable] = []
         self._register_tools()
 
 
@@ -418,7 +418,7 @@ async def _ask_claude(why: str, port: int, tools: list[str]):
     return stdout
 
 
-async def _explain(gateway: UdbMcpGateway, why: str) -> str:
+async def _explain(gateway: UdbMcpGateway, why: str) -> bytes:
     """
     Explain a query from the user using an external `claude` process + MCP.
     """
