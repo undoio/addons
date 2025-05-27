@@ -1,175 +1,103 @@
+import asyncio
+import contextlib
 import functools
 import inspect
+import json
+import os
+import random
+import signal
+import socket
+import tempfile
+import textwrap
+import time
+
+from pathlib import Path
 
 import gdb
+import pygments
+import pygments.formatters
+
 from mcp.server.fastmcp import FastMCP
 
-from src.udbpy.gdb_extensions import command, gdbio, gdbutils, udb_base, udb_last
+from src.udbpy.fileutil import mkstemp
+from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
+from src.udbpy.termstyles import ansi_format, Color, Intensity
 
 
-INSTRUCTIONS = """
-This MCP server provides access to the UDB time travel debugger. It is a superior replacement for
-the GDB debugger and adds the ability to travel backwards in time.
+import uvicorn.server
+# Prevent uvicorn trying to handle signals that already have special GDB handlers.
+uvicorn.server.HANDLED_SIGNALS = ()
 
-You should assume that operations have similar behaviour to their GDB counterparts.
+# Switch the debug level to get more context if the MCP server is misbehaving.
+LOG_LEVEL="CRITICAL"
+#LOG_LEVEL="DEBUG"
 
-# Time travel debugging
 
-Time travel debugging provides two key abilities:
+EXTENSION_PATH = Path(__file__).parent
+"""Directory containing this extension module."""
 
- * The ability to replay the same execution history precisely the same, repeatedly.  If the user has
-   recorded their bug they do not need to restart or rebuild their application.
- * The ability to rewind execution history.  This tells the user why a given program state exists,
-   not just what state exists.
+MCP_INSTRUCTIONS = open(EXTENSION_PATH / "instructions.md").read()
+"""Top-level instructions for the MCP server."""
 
-To debug effectively, you should start by recording the bug.  Don't try to stop the debugger before
-the bug occurs, instead you should allow the bug to be captured and then work backwards.
+SYSTEM_PROMPT = open(EXTENSION_PATH / "system_prompt.md").read()
+"""System prompt to supply to Claude on every invocation."""
 
-# Running UDB
+THINKING_MSGS = [l.rstrip() for l in open(EXTENSION_PATH / "thinking.txt").readlines()]
+"""Messages to display whilst the system is thinking."""
 
-UDB is already run under the control of the server.
 
-## Start and end of history
+def console_whizz(msg, end=""):
+    """
+    Animated console display for major headings.
+    """
+    for c in msg:
+        print(ansi_format(c, foreground=Color.GREEN, intensity=Intensity.BOLD), end="", flush=True)
+        time.sleep(0.01)
+    print(end=end)
 
-If you see the message "Have reached start of recorded history." it means you've got too far back in
-history.  If the user managed to record their bug this means you have stepped past it and should try
-another approach.
 
-Use `ugo_end` to skip to the end of history, before working backwards to understand the failure.
+def print_report_field(label, msg):
+    """
+    Formatted field label for reporting command results.
+    """
+    label_fmt = ansi_format(f"{label +':':10s}", foreground=Color.WHITE, intensity=Intensity.BOLD)
+    print(f" | {label_fmt} {msg}")
 
-## Navigating the stack
 
-Use `backtrace` to find out what function you are in and what called it.
+def report(fn):
+    """
+    Wrap a tool to report on the current thinking state (if appropriate) and result.
+    """
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        formatted_name = fn.__name__.removeprefix("tool_").replace("_", "-")
+        print_report_field("Operation", f"{formatted_name:15s}")
 
-Use `reverse_finish` to wind time back to before the current function was
-called.  You can apply this repeatedly.
+        sig = inspect.signature(fn)
+        binding = sig.bind(*args, **kwargs)
+        hypothesis = binding.arguments.pop("hypothesis")  # We'll report this one separately.
+        arguments = ", ".join(f"{k}={v}" for k, v in binding.arguments.items() if k != "self")
+        if arguments:
+            print_report_field("Arguments", arguments)
+        print_report_field("Thoughts", hypothesis)
 
-```
-stack trace:
-    my_leaf_function() <- current location at top
-    my_middle_function()
-    my_main_function()
+        # Present result in a compact form if it's a single line, otherwise use multiple lines.
+        try:
+            results = fn(*args, **kwargs)
+        except Exception as e:
+            results = str(e)
+            raise e
+        finally:
+            if len(results.splitlines()) == 1:
+                result_text = results
+            else:
+                result_text = "\n" + textwrap.indent(results, "   $  ", predicate=lambda _: True)
 
-debug tool:
-    reverse_finish
+            print_report_field("Result", result_text)
+            print(" |---")
+            return results
 
-stack trace:
-    my_middle_function() <- current location at top
-    my_main_function()
-```
-
-## The standard library
-
-If the program stops within the standard library it is unlikely to be
-interesting to the user.  You should use `reverse_finish` to step out of it and
-back to user code.
-
-## Navigating function calls
-
-After using `reverse_step` check that you are in the function you expected.
-
-Use `reverse_next` to step backwards over a function as it is called.
-
-```
-Source context:
-   10   int my_value = called_function()
-   ->
-   11   a = a + b;
-
-UDB:reverse_next
-
-Source context:
-    9
-   ->
-   10 int my_value = called_function()
-   11 a = a + b;
-```
-
-## Inspecting values
-
-Use `last` to wind back time to find out how and when a value was set.
-
-```
-source lines:
-    int my_value = called_function()
-
-    ... many other lines skipped ...
-
-    printf("My value is %d\n", my_value); <- debug location
-
-debug tool:
-    last my_value
-
-source lines:
-    int my_value = called_function() <- debug location
-```
-
-This works even when the memory location was modified a long time ago or in a
-different function.
-
-When `last` returns it specifies a "Was" value, which is what you were
-investigating.  "Now" is the previous value, which should be ignored or used
-for a new debugging hypothesis.
-
-`last` will only work for values that are currently in scope.  If a value is not
-currently in scope then you need to navigate backwards in time until it is.  Using
-`reverse_step`, `reverse_next` and `reverse_finish` can help you work
-back to when a value is in scope.
-
-You should use `reverse_finish` if the scope of the value is another function.
-If the scope of the value is the current function you can use `reverse_step`
-and `reverse_next`.
-
-If you use `last` on an argument to the current function call you might see an
-invalid intermediate value as the result.  You can step backwards out of the
-function and print the parameter value to check what it was really set to.
-
-Use `print` to find out the current value of a variable.  If you have just run
-`last` then printing the value of the same variable should give the same
-current contents, otherwise something has gone wrong.
-
-## Understanding `if` statements
-
-If the user is currently in an `if` statement, step back to the condition (the
-part in parentheses) and try to explain the boolean that was evaluated there.
-
-You could step back to the condition using `reverse_next`.
-
-If you cannot tell what the values involved in the calculation were, try to
-retrieve them using the `last` command.
-
-```
-source lines:
-    if (a != b) {
-        calculate_further_values()
-
-        ... skipped other lines ...
-
-        assert(bad); <- debug location
-    }
-
-debug tool:
-    reverse_next (repeat as needed)
-
-source lines:
-    if (a != b) { <- debug location
-        calculate_further_values()
-        ... skipped other lines ...
-
-debug tool:
-    last a OR last b (to investigate why the `if` statement was entered)
-```
-
-# Explaining a bug
-
-To diagnose the bug follow the following procedure:
-
- 1. Hypothesis: Form a hypothesis about why the bug occurred.  Start with getting a `backtrace`.
- 2. Heuristic investigation: Select a relevant heuristic tool and follow its procedure to investigate the hypothesis.
- 3. Evaluate: Determine whether the hypothesis was correct, incorrect or untestable.
- 4a. If the bug has been root caused, report to the user.
- 4b. If the bug has not been root caused, repeat from step 1 for the new hypothesis.
-"""
+    return wrapped
 
 
 def collect_output(fn):
@@ -198,10 +126,10 @@ def get_context(fname, line):
     """
     lines = open(fname).readlines()
 
-    start_line = max(0, line - SOURCE_CONTEXT)
-    end_line = min(len(lines), line + SOURCE_CONTEXT)
+    start_line = max(0, line - SOURCE_CONTEXT_LINES)
+    end_line = min(len(lines), line + SOURCE_CONTEXT_LINES)
 
-    formatted_lines = list(f"{i: 5d} {lines[i].rstrip()}" for i in range(start_line, end_line))
+    formatted_lines = list(f"{i + 1: 5d} {lines[i].rstrip()}" for i in range(start_line, end_line))
     formatted_lines.insert(line - 1 - start_line, "   ->")
 
     return "\n".join(formatted_lines)
@@ -221,13 +149,12 @@ def source_context(fn):
         frame = gdb.selected_frame()
         sal = frame.find_sal()
 
-        context = f"\n\nFunction: {frame.name()}\n"
+        context = f"\nFunction: {frame.name()}\n"
 
         if sal and sal.symtab:
-            context += "\n\nSource context:\n\n" + get_context(sal.symtab.filename, sal.line)
+            context += "\nSource context:\n" + get_context(sal.symtab.filename, sal.line)
         else:
-            context += "\n\nSource context unavailable.\n"
-
+            context += "\nSource context unavailable."
         return out + context
 
     return wrapped
@@ -241,7 +168,7 @@ def chain_of_thought(fn):
     understandable results.
     """
     @functools.wraps(fn)
-    def wrapped(self, theory: str, hypothesis: str, *args, **kwargs):
+    def wrapped(self, hypothesis: str, *args, **kwargs):
         return fn(self, *args, **kwargs)
 
     sig = inspect.signature(fn)
@@ -260,10 +187,10 @@ def chain_of_thought(fn):
 
 
 class UdbMcpGateway:
-    def __init__(self, udb: udb_base.Udb, mcp: FastMCP):
+    def __init__(self, udb: udb_base.Udb):
         self.udb = udb
-        self.mcp = mcp
-
+        self.mcp = FastMCP("UDB_Server", instructions=MCP_INSTRUCTIONS, log_level=LOG_LEVEL)
+        self.tools = []
         self._register_tools()
 
 
@@ -271,9 +198,12 @@ class UdbMcpGateway:
         for name, fn in inspect.getmembers(self, inspect.ismethod):
             if not name.startswith("tool_"):
                 continue
-            self.mcp.add_tool(fn=fn, name=name.removeprefix("tool_"), description=fn.__doc__)
+            name = name.removeprefix("tool_")
+            self.tools.append(name)
+            self.mcp.add_tool(fn=fn, name=name, description=fn.__doc__)
 
 
+    @report
     @chain_of_thought
     def tool_get_time(self) -> str:
         """
@@ -282,6 +212,7 @@ class UdbMcpGateway:
         return str(self.udb.time.get())
 
 
+    @report
     @source_context
     @collect_output
     @chain_of_thought
@@ -297,6 +228,7 @@ class UdbMcpGateway:
         self.udb.time.goto_end()
 
 
+    @report
     @source_context
     @collect_output
     @chain_of_thought
@@ -314,6 +246,7 @@ class UdbMcpGateway:
         )
 
 
+    @report
     @source_context
     @collect_output
     @chain_of_thought
@@ -327,6 +260,7 @@ class UdbMcpGateway:
         self.udb.execution.reverse_next(cmd="reverse-next")
 
 
+    @report
     @source_context
     @collect_output
     @chain_of_thought
@@ -336,7 +270,7 @@ class UdbMcpGateway:
         """
         self.udb.execution.reverse_finish(cmd="reverse-finish")
 
-
+    @report
     @source_context
     @collect_output
     @chain_of_thought
@@ -346,6 +280,8 @@ class UdbMcpGateway:
 
         `reverse_step` will step backwards into a function on the previous line.
         You may need to issue `reverse_step` more than once to reach the `return` statement.
+
+        It CANNOT be used to step into functions on the current line.
         ```
         Example: investigate the return path of called_function()
         
@@ -388,8 +324,13 @@ class UdbMcpGateway:
         Params:
         intended_function: the function you want to step into
         """
+        # Note that, even with the prompting above, Claude will often fail to
+        # use `reverse-step` correctly, instead applying it when the function
+        # it wants to step into is on the current line.
         self.udb.execution.reverse_step(cmd="reverse-step")
 
+
+    @report
     @chain_of_thought
     def tool_backtrace(self) -> str:
         """
@@ -397,6 +338,8 @@ class UdbMcpGateway:
         """
         return gdbutils.execute_to_string("backtrace")
 
+
+    @report
     @chain_of_thought
     def tool_get_value(self, expression: str) -> str:
         """
@@ -422,6 +365,103 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
     """
     Start an MCP server for this UDB instance.
     """
-    mcp = FastMCP("UDB Server", instructions=INSTRUCTIONS)
-    gateway = UdbMcpGateway(udb, mcp)
+    gateway = UdbMcpGateway(udb)
     gateway.mcp.run(transport="sse")
+
+
+async def _ask_claude(why: str, port: int, tools: list[str]):
+    """
+    Pose a question to an external `claude` program, supplying access to a UDB MCP server.
+    """
+    if LOG_LEVEL == "debug":
+        print(f"Connecting Claude to MCP server on port {port}")
+    else:
+        console_whizz(f" * {random.choice(THINKING_MSGS)}...", end="\n")
+        print(" |---")
+
+    mcp_config = {
+        "mcpServers" : {
+            "UDB_Server": {
+                "type": "sse",
+                "url": f"http://localhost:{port}/sse"
+            }
+        }
+    }
+    mcp_config_fd, mcp_config_path = mkstemp(prefix="mcp_config", suffix=".json")
+    with contextlib.closing(os.fdopen(mcp_config_fd, "w")) as mcp_config_file:
+        json.dump(mcp_config, mcp_config_file)
+
+    allowed_tools = ",".join(f"mcp__UDB_Server__{t}" for t in tools)
+
+    # If we're gathering debug logs then get as much feedback from Claude as possible.
+    debug_flags = ["--verbose", "-d"] if LOG_LEVEL == "DEBUG" else []
+
+    stdout = ""
+    try:
+        claude = await asyncio.create_subprocess_exec("claude",
+                                                      *debug_flags,
+                                                      "--model", "opus",
+                                                      "--mcp-config", mcp_config_path,
+                                                      "--allowedTools", allowed_tools,
+                                                      "-p", why,
+                                                      "--system-prompt", SYSTEM_PROMPT,
+                                                      stdout=asyncio.subprocess.PIPE,
+                                                      stderr=asyncio.subprocess.PIPE)
+
+        stdout, _ = await claude.communicate()
+    finally:
+        # Make sure Claude is properly cleaned up if we exited early.
+        if claude.returncode is None:
+            claude.terminate()
+            await claude.wait()
+
+    return stdout
+
+
+async def _explain(gateway: UdbMcpGateway, why: str) -> str:
+    """
+    Explain a query from the user using an external `claude` process + MCP.
+    """
+    try:
+        sock = socket.create_server(("localhost", 0))
+        _, port = sock.getsockname()
+
+        # Set up a temporary MCP server for this UDB session.
+        starlette_app = gateway.mcp.sse_app()
+        config = uvicorn.Config(starlette_app, log_level=LOG_LEVEL.lower())
+        server = uvicorn.Server(config)
+        mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
+
+        # Ask Claude the question.
+        explanation = await _ask_claude(why, port, tools=gateway.tools)
+
+    finally:
+        # Shut down the server once we have an explanation.
+        server.should_exit = True
+        await server.shutdown()
+        await mcp_task
+        sock.close()
+
+    return explanation
+
+
+# Something in the webserver stack holds onto a reference to the event loop
+# after shutting down. It's easier to just using the same event loop for each
+# invocation.
+event_loop = asyncio.new_event_loop()
+
+@command.register(gdb.COMMAND_USER, arg_parser=command_args.Untokenized())
+def explain(udb: udb_base.Udb, why: str) -> None:
+    """
+    Use AI to answer questions about the code.
+    """
+    gateway = UdbMcpGateway(udb)
+
+    global event_loop
+    if not event_loop:
+        event_loop = asyncio.new_event_loop()
+    explanation = event_loop.run_until_complete(_explain(gateway, why))
+    #explanation = asyncio.run(_explain(gateway, why))
+
+    console_whizz(" * Explanation:", end="\n")
+    print(textwrap.indent(explanation.decode("utf-8"), "   =  ", predicate=lambda _: True))
