@@ -341,7 +341,7 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_get_value(self, expression: str) -> str:
+    def tool_print(self, expression: str) -> str:
         """
         Get the value of an expression.
 
