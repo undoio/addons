@@ -334,6 +334,25 @@ class UdbMcpGateway:
 
 
     @report
+    @source_context
+    @collect_output
+    @chain_of_thought
+    def tool_reverse_step_into_current_line(self) -> str:
+        """
+        Reverse into a function call on the current line of the program.
+
+        The current line must contain a function call.
+
+        Params:
+        intended_function: the function you want to step into
+        """
+        # Note that, even with the prompting above, Claude will often fail to
+        # use `reverse-step` correctly, instead applying it when the function
+        # it wants to step into is on the current line.
+        self.udb.execution.next()
+        self.udb.execution.reverse_step(cmd="reverse-step")
+
+    @report
     @chain_of_thought
     def tool_backtrace(self) -> str:
         """
