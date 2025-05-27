@@ -346,9 +346,6 @@ class UdbMcpGateway:
         Params:
         intended_function: the function you want to step into
         """
-        # Note that, even with the prompting above, Claude will often fail to
-        # use `reverse-step` correctly, instead applying it when the function
-        # it wants to step into is on the current line.
         self.udb.execution.next()
         self.udb.execution.reverse_step(cmd="reverse-step")
 
