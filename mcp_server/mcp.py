@@ -205,7 +205,7 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_get_time(self) -> str:
+    def nouse_tool_get_time(self) -> str:
         """
         Get the current point in recorded history.
         """
@@ -277,7 +277,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_step(self, intended_function: str) -> str:
+    def nouse_tool_reverse_step(self, intended_function: str) -> str:
         """
         Step into the return path of a function on an earlier line of source code.
 
