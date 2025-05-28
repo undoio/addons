@@ -231,14 +231,6 @@ class UdbMcpGateway:
             self.mcp.add_tool(fn=fn, name=name, description=fn.__doc__)
 
     @report
-    @chain_of_thought
-    def nouse_tool_get_time(self) -> str:
-        """
-        Get the current point in recorded history.
-        """
-        return str(self.udb.time.get())
-
-    @report
     @source_context
     @collect_output
     @chain_of_thought
