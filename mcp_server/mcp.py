@@ -302,7 +302,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def nouse_tool_reverse_step(self, intended_function: str) -> None:
+    def nouse_tool_reverse_step(self) -> None:
         """
         Step into the return path of a function on an earlier line of source code.
 
@@ -348,9 +348,6 @@ class UdbMcpGateway:
             7  }
             8
         ```
-
-        Params:
-        intended_function: the function you want to step into
         """
         # Note that, even with the prompting above, Claude will often fail to
         # use `reverse-step` correctly, instead applying it when the function
