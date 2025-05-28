@@ -373,6 +373,44 @@ class UdbMcpGateway:
         return str(gdb.parse_and_eval(expression))
 
 
+    @report
+    @chain_of_thought
+    def tool_ubookmark(self, name) -> str:
+        """
+        Set a bookmark at the current point in time.
+
+        Use this when you have identified an interesting point in time during the debug session.
+
+        Params:
+        name - a descriptive name for the current point of interest.
+        """
+        self.udb.bookmarks.add(name)
+
+
+    @report
+    @chain_of_thought
+    def tool_info_bookmarks(self) -> str:
+        """
+        Returns the names of previously-stored bookmarks.
+
+        Use this to query interesting points in time that are already identified.
+        """
+        return "\n".join(self.udb.bookmarks.iter_bookmark_names())
+
+
+    @report
+    @source_context
+    @collect_output
+    @chain_of_thought
+    def tool_ugo_bookmark(self, name) -> str:
+        """
+        Travels to the time of a named bookmark that was previously set.
+
+        Use this to investigate further from an interesting point in time.
+        """
+        self.udb.bookmarks.goto(name)
+
+
 command.register_prefix(
     "uexperimental mcp",
     gdb.COMMAND_NONE,

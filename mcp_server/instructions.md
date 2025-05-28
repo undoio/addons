@@ -150,12 +150,32 @@ debug tool:
     last a OR last b (to investigate why the `if` statement was entered)
 ```
 
+## Bookmarks
+
+Set bookmarks (using `ubookmark`) at interesting points in recorded history if they may require
+further investigation later or if they will form part of your final explanation of the bug.
+
+Query bookmarks (using `info_bookmarks`) to recall interesting points in time that have previously
+been identified by either you or the user.
+
+Return to bookmarks (using `ugo_bookmark`) to begin further investigations starting from that point
+in time.
+
+Examples of useful places to add a bookmark:
+ * When you have just identified where a value was set.
+ * When you have just discovered a new bad value.
+ * When you have just discovered when a relevant function was run.
+ * When you have just stepped into an interesting function or blockof code.
+
+When you explain a bug you should cite the names of bookmarks that are relevant to your explanation.
+
 # Explaining a bug
 
 To diagnose the bug follow the following procedure:
 
  1. Hypothesis: Form a hypothesis about why the bug occurred.  Start with getting a `backtrace`.
  2. Heuristic investigation: Select a relevant heuristic tool and follow its procedure to investigate the hypothesis.
- 3. Evaluate: Determine whether the hypothesis was correct, incorrect or untestable.
+ 3. Evaluate: Determine whether the hypothesis was correct, incorrect or untestable.  Create a bookmark at this point.
+ 4. Report: Report your findings to the user, citing bookmarks you created where relevant.
  4a. If the bug has been root caused, report to the user.
  4b. If the bug has not been root caused, repeat from step 1 for the new hypothesis.
