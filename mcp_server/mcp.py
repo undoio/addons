@@ -11,6 +11,7 @@ import tempfile
 import textwrap
 import time
 
+from collections.abc import Callable
 from pathlib import Path
 
 import gdb
@@ -46,7 +47,7 @@ THINKING_MSGS = [l.rstrip() for l in open(EXTENSION_PATH / "thinking.txt").readl
 """Messages to display whilst the system is thinking."""
 
 
-def console_whizz(msg, end=""):
+def console_whizz(msg: str, end: str = "") -> None:
     """
     Animated console display for major headings.
     """
@@ -56,7 +57,7 @@ def console_whizz(msg, end=""):
     print(end=end)
 
 
-def print_report_field(label, msg):
+def print_report_field(label: str, msg: str) -> None:
     """
     Formatted field label for reporting command results.
     """
@@ -120,7 +121,7 @@ SOURCE_CONTEXT_LINES = 5
 """The maximum size of source context to show either side of the current position."""
 
 
-def get_context(fname, line):
+def get_context(fname: str, line: int) -> str:
     """
     Return formatted file context surrounding the current debug location.
     """
@@ -190,7 +191,7 @@ class UdbMcpGateway:
     def __init__(self, udb: udb_base.Udb):
         self.udb = udb
         self.mcp = FastMCP("UDB_Server", instructions=MCP_INSTRUCTIONS, log_level=LOG_LEVEL)
-        self.tools: list[Callable] = []
+        self.tools: list[str] = []
         self._register_tools()
 
 
@@ -429,7 +430,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
     gateway.mcp.run(transport="sse")
 
 
-async def _ask_claude(why: str, port: int, tools: list[str]):
+async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
     """
     Pose a question to an external `claude` program, supplying access to a UDB MCP server.
     """
@@ -456,7 +457,7 @@ async def _ask_claude(why: str, port: int, tools: list[str]):
     # If we're gathering debug logs then get as much feedback from Claude as possible.
     debug_flags = ["--verbose", "-d"] if LOG_LEVEL == "DEBUG" else []
 
-    stdout = ""
+    stdout = b""
     try:
         claude = await asyncio.create_subprocess_exec("claude",
                                                       *debug_flags,
