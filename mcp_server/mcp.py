@@ -5,9 +5,7 @@ import inspect
 import json
 import os
 import random
-import signal
 import socket
-import tempfile
 import textwrap
 import time
 
@@ -195,6 +193,7 @@ def chain_of_thought(
 
     @functools.wraps(fn)
     def wrapped(self, hypothesis: str, *args, **kwargs):
+        # pylint: disable=unused-argument
         return fn(self, *args, **kwargs)
 
     sig = inspect.signature(fn)
