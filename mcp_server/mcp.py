@@ -339,6 +339,9 @@ class UdbMcpGateway:
         """
         Get the value of an expression.
 
+        This should NOT be used to retrieve the value of GDB value history
+        variables such as $0, $1, $2, etc.
+
         Params:
         expression -- the expression to be evaluated.
         """
