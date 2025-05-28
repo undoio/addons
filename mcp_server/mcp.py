@@ -5,12 +5,15 @@ import inspect
 import json
 import os
 import random
+import signal
 import socket
 import tempfile
 import textwrap
 import time
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Concatenate, ParamSpec, TypeAlias, TypeVar
 
 import gdb
 
@@ -51,6 +54,11 @@ THINKING_MSGS = [l.rstrip() for l in open(EXTENSION_PATH / "thinking.txt").readl
 """Messages to display whilst the system is thinking."""
 
 
+P = ParamSpec("P")
+T = TypeVar("T")
+UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
+
+
 def console_whizz(msg: str, end: str = "") -> None:
     """
     Animated console display for major headings.
@@ -73,7 +81,7 @@ def print_report_field(label: str, msg: str) -> None:
     print(f" | {label_fmt} {msg}")
 
 
-def report(fn):
+def report(fn: Callable[P, T]) -> Callable[P, T]:
     """
     Wrap a tool to report on the current thinking state (if appropriate) and result.
     """
@@ -110,7 +118,7 @@ def report(fn):
     return wrapped
 
 
-def collect_output(fn):
+def collect_output(fn: Callable[P, None]) -> Callable[P, str]:
     """
     Collect GDB's output during the execution of the wrapped function.
 
@@ -123,6 +131,9 @@ def collect_output(fn):
             fn(*args, **kwargs)
 
         return collector.output
+
+    sig = inspect.signature(fn)
+    wrapped.__signature__ = sig.replace(return_annotation=str)  # type: ignore
 
     return wrapped
 
@@ -146,7 +157,7 @@ def get_context(fname: str, line: int) -> str:
     return "\n".join(formatted_lines)
 
 
-def source_context(fn):
+def source_context(fn: Callable[P, str]) -> Callable[P, str]:
     """
     Add source location context to the result of a wrapped function.
 
@@ -172,7 +183,9 @@ def source_context(fn):
     return wrapped
 
 
-def chain_of_thought(fn):
+def chain_of_thought(
+    fn: Callable[Concatenate[UdbMcpGatewayAlias, P], T],
+) -> Callable[Concatenate[UdbMcpGatewayAlias, str, P], T]:
     """
     Add chain-of-thought parameters and documentation to the wrapped function.
 
@@ -229,7 +242,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_ugo_end(self) -> str:
+    def tool_ugo_end(self) -> None:
         """
         Go to the end of recorded history.
 
@@ -244,7 +257,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_last_value(self, expression: str) -> str:
+    def tool_last_value(self, expression: str) -> None:
         """
         Wind back time to the last time an expression was modified.
 
@@ -267,7 +280,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_next(self) -> str:
+    def tool_reverse_next(self) -> None:
         """
         Run backwards to the previous line of source code, stepping over function calls.
 
@@ -280,7 +293,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_finish(self) -> str:
+    def tool_reverse_finish(self) -> None:
         """
         Run backwards to before the current function was called.
         """
@@ -290,7 +303,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def nouse_tool_reverse_step(self, intended_function: str) -> str:
+    def nouse_tool_reverse_step(self, intended_function: str) -> None:
         """
         Step into the return path of a function on an earlier line of source code.
 
@@ -349,7 +362,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_step_into_current_line(self) -> str:
+    def tool_reverse_step_into_current_line(self) -> None:
         """
         Reverse into a function call on the current line of the program.
 
@@ -382,7 +395,7 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_ubookmark(self, name) -> str:
+    def tool_ubookmark(self, name) -> None:
         """
         Set a bookmark at the current point in time.
 
@@ -407,7 +420,7 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_ugo_bookmark(self, name) -> str:
+    def tool_ugo_bookmark(self, name) -> None:
         """
         Travels to the time of a named bookmark that was previously set.
 
@@ -528,6 +541,7 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     global event_loop
     if not event_loop:
         event_loop = asyncio.new_event_loop()
+
     explanation = event_loop.run_until_complete(_explain(gateway, why))
     # explanation = asyncio.run(_explain(gateway, why))
 
