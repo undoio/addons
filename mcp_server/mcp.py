@@ -111,7 +111,7 @@ def report(fn: Callable[P, T]) -> Callable[P, T]:
 
             print_report_field("Result", result_text)
             print(" |---")
-            return results
+        return results
 
     return wrapped
 
