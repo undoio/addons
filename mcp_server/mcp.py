@@ -242,6 +242,9 @@ class UdbMcpGateway:
         This should NOT be used for address-taken expressions, such as &variable_name, since this
         will be very slow and won't give a meaningful answer.
 
+        This should NOT be used for debugger convenience variables (starting with a $), since this
+        will be very slow.
+
         Use expressions that are based solely on variables or memory locations.
         """
         self.udb.last.execute_command(
