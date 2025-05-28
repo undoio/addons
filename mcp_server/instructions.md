@@ -56,23 +56,19 @@ back to user code.
 
 ## Navigating function calls
 
-After using `reverse_step` check that you are in the function you expected.
-
 Use `reverse_next` to step backwards over a function as it is called.
 
 ```
 Source context:
-   10   int my_value = called_function()
-   ->
-   11   a = a + b;
+    10   int my_value = called_function()
+ -> 11   a = a + b;
 
 UDB:reverse_next
 
 Source context:
-    9
-   ->
-   10 int my_value = called_function()
-   11 a = a + b;
+     9
+ -> 10 int my_value = called_function()
+    11 a = a + b;
 ```
 
 ## Inspecting values

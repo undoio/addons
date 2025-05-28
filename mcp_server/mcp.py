@@ -149,8 +149,9 @@ def get_context(fname: str, line: int) -> str:
     start_line = max(0, line - SOURCE_CONTEXT_LINES)
     end_line = min(len(lines), line + SOURCE_CONTEXT_LINES)
 
-    formatted_lines = list(f"{i + 1: 5d} {lines[i].rstrip()}" for i in range(start_line, end_line))
-    formatted_lines.insert(line - 1 - start_line, "   ->")
+    formatted_lines = list(f" {'->' if i == line - 1 else '  '} "
+                           f"{i + 1: 5d} {lines[i].rstrip()}"
+                           for i in range(start_line, end_line))
 
     return "\n".join(formatted_lines)
 
@@ -297,62 +298,6 @@ class UdbMcpGateway:
         Run backwards to before the current function was called.
         """
         self.udb.execution.reverse_finish(cmd="reverse-finish")
-
-    @report
-    @source_context
-    @collect_output
-    @chain_of_thought
-    def nouse_tool_reverse_step(self) -> None:
-        """
-        Step into the return path of a function on an earlier line of source code.
-
-        `reverse_step` will step backwards into a function on the previous line.
-        You may need to issue `reverse_step` more than once to reach the `return` statement.
-
-        It CANNOT be used to step into functions on the current line.
-        ```
-        Example: investigate the return path of called_function()
-
-        Source context:
-             8       int my_value = called_function();
-            ->
-             9       a = a + b;
-
-        UDB:reverse_step (repeat, if necessary)
-
-             2      int called_function(void)
-             3      {
-            ->
-             4          return 7;
-             5      }
-             6
-        ```
-
-        ```
-        Example: investigate the return path of function_one()
-
-        Source context:
-           12  int main(void)
-           13  {
-           14      function_one(7);
-           ->
-           15      function_two();
-           16  }
-
-        UDB:reverse_step
-
-            4  void function_one(int arg)
-            5  {
-            6      printf("Argument was: %d\n", arg);
-           ->
-            7  }
-            8
-        ```
-        """
-        # Note that, even with the prompting above, Claude will often fail to
-        # use `reverse-step` correctly, instead applying it when the function
-        # it wants to step into is on the current line.
-        self.udb.execution.reverse_step(cmd="reverse-step")
 
     @report
     @source_context
