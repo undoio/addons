@@ -524,7 +524,7 @@ async def _explain(gateway: UdbMcpGateway, why: str) -> bytes:
 # Something in the webserver stack holds onto a reference to the event loop
 # after shutting down. It's easier to just using the same event loop for each
 # invocation.
-event_loop = asyncio.new_event_loop()
+event_loop = None
 
 
 @command.register(gdb.COMMAND_USER, arg_parser=command_args.Untokenized())
