@@ -1,3 +1,14 @@
+"""
+MCP server extension for UDB.
+
+Provides the commands:
+
+ * `uexperimental mcp serve` - to expose the current session for use as an MCP server by an external
+   AI client tool.
+ * `explain` - to hand control to a local Claude Code and attempt to answer a question within a
+   running UDB session.
+"""
+
 import asyncio
 import contextlib
 import functools
@@ -216,6 +227,13 @@ def chain_of_thought(
 
 
 class UdbMcpGateway:
+    """
+    Plumbing class to expose selected UDB functionality as a set of tools to an MCP server.
+
+    The operations exposed are chosen to be well-suited to use by an LLM. For now, that means that
+    only reverse operations are supported (to impose reverse debugging practices on the LLM) and
+    that unnecessary (or potentially distracting) operations are not exposed.
+    """
     def __init__(self, udb: udb_base.Udb):
         self.udb = udb
         self.mcp = FastMCP("UDB_Server", instructions=MCP_INSTRUCTIONS, log_level=LOG_LEVEL)
