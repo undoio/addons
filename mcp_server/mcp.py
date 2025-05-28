@@ -5,33 +5,37 @@ import inspect
 import json
 import os
 import random
-import signal
 import socket
 import tempfile
 import textwrap
 import time
 
-from collections.abc import Callable
 from pathlib import Path
 
 import gdb
-import pygments
-import pygments.formatters
 
 from mcp.server.fastmcp import FastMCP
 
 from src.udbpy.fileutil import mkstemp
-from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
+from src.udbpy.gdb_extensions import (
+    command,
+    command_args,
+    gdbio,
+    gdbutils,
+    udb_base,
+    udb_last,
+)
 from src.udbpy.termstyles import ansi_format, Color, Intensity
 
 
 import uvicorn.server
+
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
 uvicorn.server.HANDLED_SIGNALS = ()
 
 # Switch the debug level to get more context if the MCP server is misbehaving.
-LOG_LEVEL="CRITICAL"
-#LOG_LEVEL="DEBUG"
+LOG_LEVEL = "CRITICAL"
+# LOG_LEVEL="DEBUG"
 
 
 EXTENSION_PATH = Path(__file__).parent
@@ -52,7 +56,11 @@ def console_whizz(msg: str, end: str = "") -> None:
     Animated console display for major headings.
     """
     for c in msg:
-        print(ansi_format(c, foreground=Color.GREEN, intensity=Intensity.BOLD), end="", flush=True)
+        print(
+            ansi_format(c, foreground=Color.GREEN, intensity=Intensity.BOLD),
+            end="",
+            flush=True,
+        )
         time.sleep(0.01)
     print(end=end)
 
@@ -61,7 +69,7 @@ def print_report_field(label: str, msg: str) -> None:
     """
     Formatted field label for reporting command results.
     """
-    label_fmt = ansi_format(f"{label +':':10s}", foreground=Color.WHITE, intensity=Intensity.BOLD)
+    label_fmt = ansi_format(f"{label + ':':10s}", foreground=Color.WHITE, intensity=Intensity.BOLD)
     print(f" | {label_fmt} {msg}")
 
 
@@ -69,6 +77,7 @@ def report(fn):
     """
     Wrap a tool to report on the current thinking state (if appropriate) and result.
     """
+
     @functools.wraps(fn)
     def wrapped(*args, **kwargs):
         formatted_name = fn.__name__.removeprefix("tool_").replace("_", "-")
@@ -107,6 +116,7 @@ def collect_output(fn):
 
     Used to pass back interactive output directly to the LLM.
     """
+
     @functools.wraps(fn)
     def wrapped(*args, **kwargs):
         with gdbio.CollectOutput() as collector:
@@ -143,6 +153,7 @@ def source_context(fn):
     This informs the LLM of the current source context when the command returns, useful when a
     command moves through debug history.
     """
+
     @functools.wraps(fn)
     def wrapped(*args, **kwargs):
         out = fn(*args, **kwargs)
@@ -168,17 +179,21 @@ def chain_of_thought(fn):
     This requires the LLM to explain its reasoning as it goes along, leading to better or more
     understandable results.
     """
+
     @functools.wraps(fn)
     def wrapped(self, hypothesis: str, *args, **kwargs):
         return fn(self, *args, **kwargs)
 
     sig = inspect.signature(fn)
     params = list(sig.parameters.values())
-    params += [inspect.Parameter(param, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str)
-               for param in ("hypothesis",)]
-        
-    wrapped.__signature__ = sig.replace(parameters=params)
+    hypothesis_param = inspect.Parameter(
+        "hypothesis", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str
+    )
+    params.insert(1, hypothesis_param)
 
+    wrapped.__signature__ = sig.replace(parameters=params)  # type: ignore
+
+    assert wrapped.__doc__
     wrapped.__doc__ += """
         Additional parameters:
         hypothesis -- describe the hypothesis you are currently investigating.
@@ -194,7 +209,6 @@ class UdbMcpGateway:
         self.tools: list[str] = []
         self._register_tools()
 
-
     def _register_tools(self) -> None:
         for name, fn in inspect.getmembers(self, inspect.ismethod):
             if not name.startswith("tool_"):
@@ -203,7 +217,6 @@ class UdbMcpGateway:
             self.tools.append(name)
             self.mcp.add_tool(fn=fn, name=name, description=fn.__doc__)
 
-
     @report
     @chain_of_thought
     def nouse_tool_get_time(self) -> str:
@@ -211,7 +224,6 @@ class UdbMcpGateway:
         Get the current point in recorded history.
         """
         return str(self.udb.time.get())
-
 
     @report
     @source_context
@@ -227,7 +239,6 @@ class UdbMcpGateway:
         again.
         """
         self.udb.time.goto_end()
-
 
     @report
     @source_context
@@ -252,7 +263,6 @@ class UdbMcpGateway:
             expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
         )
 
-
     @report
     @source_context
     @collect_output
@@ -265,7 +275,6 @@ class UdbMcpGateway:
         function you will `reverse_step` into.
         """
         self.udb.execution.reverse_next(cmd="reverse-next")
-
 
     @report
     @source_context
@@ -291,14 +300,14 @@ class UdbMcpGateway:
         It CANNOT be used to step into functions on the current line.
         ```
         Example: investigate the return path of called_function()
-        
+
         Source context:
              8       int my_value = called_function();
             ->
              9       a = a + b;
-        
+
         UDB:reverse_step (repeat, if necessary)
-        
+
              2      int called_function(void)
              3      {
             ->
@@ -306,10 +315,10 @@ class UdbMcpGateway:
              5      }
              6
         ```
-        
+
         ```
         Example: investigate the return path of function_one()
-        
+
         Source context:
            12  int main(void)
            13  {
@@ -317,9 +326,9 @@ class UdbMcpGateway:
            ->
            15      function_two();
            16  }
-        
+
         UDB:reverse_step
-        
+
             4  void function_one(int arg)
             5  {
             6      printf("Argument was: %d\n", arg);
@@ -335,7 +344,6 @@ class UdbMcpGateway:
         # use `reverse-step` correctly, instead applying it when the function
         # it wants to step into is on the current line.
         self.udb.execution.reverse_step(cmd="reverse-step")
-
 
     @report
     @source_context
@@ -361,7 +369,6 @@ class UdbMcpGateway:
         """
         return gdbutils.execute_to_string("backtrace")
 
-
     @report
     @chain_of_thought
     def tool_print(self, expression: str) -> str:
@@ -372,7 +379,6 @@ class UdbMcpGateway:
         expression -- the expression to be evaluated.
         """
         return str(gdb.parse_and_eval(expression))
-
 
     @report
     @chain_of_thought
@@ -387,7 +393,6 @@ class UdbMcpGateway:
         """
         self.udb.bookmarks.add(name)
 
-
     @report
     @chain_of_thought
     def tool_info_bookmarks(self) -> str:
@@ -397,7 +402,6 @@ class UdbMcpGateway:
         Use this to query interesting points in time that are already identified.
         """
         return "\n".join(self.udb.bookmarks.iter_bookmark_names())
-
 
     @report
     @source_context
@@ -441,12 +445,7 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
         print(" |---")
 
     mcp_config = {
-        "mcpServers" : {
-            "UDB_Server": {
-                "type": "sse",
-                "url": f"http://localhost:{port}/sse"
-            }
-        }
+        "mcpServers": {"UDB_Server": {"type": "sse", "url": f"http://localhost:{port}/sse"}}
     }
     mcp_config_fd, mcp_config_path = mkstemp(prefix="mcp_config", suffix=".json")
     with contextlib.closing(os.fdopen(mcp_config_fd, "w")) as mcp_config_file:
@@ -459,15 +458,22 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
 
     stdout = b""
     try:
-        claude = await asyncio.create_subprocess_exec("claude",
-                                                      *debug_flags,
-                                                      "--model", "opus",
-                                                      "--mcp-config", mcp_config_path,
-                                                      "--allowedTools", allowed_tools,
-                                                      "-p", why,
-                                                      "--system-prompt", SYSTEM_PROMPT,
-                                                      stdout=asyncio.subprocess.PIPE,
-                                                      stderr=asyncio.subprocess.PIPE)
+        claude = await asyncio.create_subprocess_exec(
+            "claude",
+            *debug_flags,
+            "--model",
+            "opus",
+            "--mcp-config",
+            mcp_config_path,
+            "--allowedTools",
+            allowed_tools,
+            "-p",
+            why,
+            "--system-prompt",
+            SYSTEM_PROMPT,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
         stdout, _ = await claude.communicate()
     finally:
@@ -511,6 +517,7 @@ async def _explain(gateway: UdbMcpGateway, why: str) -> bytes:
 # invocation.
 event_loop = asyncio.new_event_loop()
 
+
 @command.register(gdb.COMMAND_USER, arg_parser=command_args.Untokenized())
 def explain(udb: udb_base.Udb, why: str) -> None:
     """
@@ -522,7 +529,7 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     if not event_loop:
         event_loop = asyncio.new_event_loop()
     explanation = event_loop.run_until_complete(_explain(gateway, why))
-    #explanation = asyncio.run(_explain(gateway, why))
+    # explanation = asyncio.run(_explain(gateway, why))
 
     console_whizz(" * Explanation:", end="\n")
     print(textwrap.indent(explanation.decode("utf-8"), "   =  ", predicate=lambda _: True))
