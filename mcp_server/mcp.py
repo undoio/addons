@@ -204,6 +204,7 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
             context += "\nSource context:\n" + source
         else:
             context += "\nSource context unavailable."
+
         return out + context
 
     return wrapped
@@ -250,6 +251,7 @@ class UdbMcpGateway:
     only reverse operations are supported (to impose reverse debugging practices on the LLM) and
     that unnecessary (or potentially distracting) operations are not exposed.
     """
+
     def __init__(self, udb: udb_base.Udb):
         self.udb = udb
         self.mcp = FastMCP("UDB_Server", instructions=MCP_INSTRUCTIONS, log_level=LOG_LEVEL)
