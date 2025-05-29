@@ -53,13 +53,13 @@ LOG_LEVEL = "CRITICAL"
 EXTENSION_PATH = Path(__file__).parent
 """Directory containing this extension module."""
 
-MCP_INSTRUCTIONS = open(EXTENSION_PATH / "instructions.md").read()
+MCP_INSTRUCTIONS = (EXTENSION_PATH / "instructions.md").read_text(encoding="UTF-8")
 """Top-level instructions for the MCP server."""
 
-SYSTEM_PROMPT = open(EXTENSION_PATH / "system_prompt.md").read()
+SYSTEM_PROMPT = (EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8")
 """System prompt to supply to Claude on every invocation."""
 
-THINKING_MSGS = [l.rstrip() for l in open(EXTENSION_PATH / "thinking.txt").readlines()]
+THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")
 """Messages to display whilst the system is thinking."""
 
 
@@ -155,7 +155,7 @@ def get_context(fname: str, line: int) -> str:
     """
     Return formatted file context surrounding the current debug location.
     """
-    lines = open(fname).readlines()
+    lines = Path(fname).read_text(encoding="UTF-8").split("\n")
 
     start_line = max(0, line - SOURCE_CONTEXT_LINES)
     end_line = min(len(lines), line + SOURCE_CONTEXT_LINES)
