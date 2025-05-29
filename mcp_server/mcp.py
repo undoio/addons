@@ -28,7 +28,7 @@ import gdb
 
 from mcp.server.fastmcp import FastMCP
 
-from src.udbpy import textutil
+from src.udbpy import textutil, ui
 from src.udbpy.fileutil import mkstemp
 from src.udbpy.gdb_extensions import (
     command,
@@ -624,6 +624,13 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     """
     Use AI to answer questions about the code.
     """
+    if not why:
+        print("Enter your question (type ^D on a new line to exit):")
+        with contextlib.suppress(EOFError):
+            while True:
+                why += ui.get_user_input(prompt="> ") + "\n"
+        print()
+
     gateway = UdbMcpGateway(udb)
 
     global event_loop
