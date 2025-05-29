@@ -329,19 +329,60 @@ class UdbMcpGateway:
 
     @report
     @source_context
-    @collect_output
     @chain_of_thought
-    def tool_reverse_step_into_current_line(self) -> None:
+    def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
         """
         Reverse into a function call on the current line of the program.
 
         The current line must contain a function call.
 
         Params:
-        intended_function: the function you want to step into
+        target_fn: the function you want to step into
         """
+        # LLMs prefer to step backwards into a function on the current line,
+        # rather than reverse up to that line and then step in.
+        #
+        # Also, it's possible that there are multiple functions to step into on
+        # a given line (either because the calls are nested or because there
+        # are multiple in sequence).
+        #
+        # To handle these cases, we ask the LLM what function it wants, then:
+        #  * Step forward past the current line.
+        #  * Set a breakpoint on the start of the target function.
+        #  * Run back to it.
+        #  * Use "finish" to get out (grabbing the return value as we go).
+        #  * Use "reverse-step" to get back into the end of the function.
+
+        # Step to next line.
         self.udb.execution.next()
-        self.udb.execution.reverse_step(cmd="reverse-step")
+
+        # Now try to step back into the correct function.
+        with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
+            # Create a breakpoint on the start of the target function.
+            target_start_bp = gdb.Breakpoint(target_fn, internal=True)
+            target_start_bp.thread = gdb.selected_thread().global_num
+            assert target_start_bp.is_valid()
+
+            while target_start_bp.hit_count == 0:
+                self.udb.execution.reverse_cont()
+
+            # Check we really got to the function we intended.
+            assert gdb.selected_frame().name() == target_fn
+
+            # We're at the start of the target function, now we need to get to the end.
+            self.udb.execution.finish()
+            return_value = gdb.parse_and_eval("$")
+
+            # Step back into the end of the function.
+            self.udb.execution.reverse_step(cmd="reverse-step")
+
+            # Check that we got back into the function we intended.
+            assert gdb.selected_frame().name() == target_fn
+
+        if LOG_LEVEL == "DEBUG":
+            print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
+
+        return f"{target_fn} return value: {return_value}"
 
     @report
     @chain_of_thought
