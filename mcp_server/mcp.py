@@ -640,7 +640,9 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     if not event_loop:
         event_loop = asyncio.new_event_loop()
 
-    explanation = event_loop.run_until_complete(_explain(gateway, why))
+    # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
+    with udb.replay_standard_streams.temporary_set(False), gdbutils.breakpoints_suspended():
+        explanation = event_loop.run_until_complete(_explain(gateway, why))
     # explanation = asyncio.run(_explain(gateway, why))
 
     console_whizz(" * Explanation:", end="\n")
