@@ -59,7 +59,7 @@ MCP_INSTRUCTIONS = (EXTENSION_PATH / "instructions.md").read_text(encoding="UTF-
 SYSTEM_PROMPT = (EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8")
 """System prompt to supply to Claude on every invocation."""
 
-THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")
+THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")[:-1]
 """Messages to display whilst the system is thinking."""
 
 
