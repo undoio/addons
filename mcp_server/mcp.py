@@ -155,14 +155,18 @@ def get_context(fname: str, line: int) -> str:
     """
     Return formatted file context surrounding the current debug location.
     """
-    lines = Path(fname).read_text(encoding="UTF-8").split("\n")
+    try:
+        lines = Path(fname).read_text(encoding="UTF-8").split("\n")
+    except FileNotFoundError:
+        return ""
 
     start_line = max(0, line - SOURCE_CONTEXT_LINES)
     end_line = min(len(lines), line + SOURCE_CONTEXT_LINES)
 
-    formatted_lines = list(f" {'->' if i == line - 1 else '  '} "
-                           f"{i + 1: 5d} {lines[i].rstrip()}"
-                           for i in range(start_line, end_line))
+    formatted_lines = list(
+        f" {'->' if i == line - 1 else '  '} {i + 1: 5d} {lines[i].rstrip()}"
+        for i in range(start_line, end_line)
+    )
 
     return "\n".join(formatted_lines)
 
@@ -184,8 +188,12 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
 
         context = f"\nFunction: {frame.name()}\n"
 
+        source = None
         if sal and sal.symtab:
-            context += "\nSource context:\n" + get_context(sal.symtab.filename, sal.line)
+            source = get_context(sal.symtab.filename, sal.line)
+
+        if source:
+            context += "\nSource context:\n" + source
         else:
             context += "\nSource context unavailable."
         return out + context
