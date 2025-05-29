@@ -437,6 +437,9 @@ class UdbMcpGateway:
         """
         Travels to the time of a named bookmark that was previously set.
 
+        You can only use this for bookmarks that you have previously set using
+        `ubookmark` or that appear in the output of `info_bookmarks`.
+
         Use this to investigate further from an interesting point in time.
         """
         self.udb.bookmarks.goto(name)
