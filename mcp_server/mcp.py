@@ -28,6 +28,7 @@ import gdb
 
 from mcp.server.fastmcp import FastMCP
 
+from src.udbpy import textutil
 from src.udbpy.fileutil import mkstemp
 from src.udbpy.gdb_extensions import (
     command,
@@ -90,6 +91,13 @@ def print_report_field(label: str, msg: str) -> None:
     print(f" | {label_fmt} {msg}")
 
 
+def print_divider() -> None:
+    """
+    Display a divider between output elements.
+    """
+    print(" |---")
+
+
 def report(fn: Callable[P, T]) -> Callable[P, T]:
     """
     Wrap a tool to report on the current thinking state (if appropriate) and result.
@@ -121,7 +129,7 @@ def report(fn: Callable[P, T]) -> Callable[P, T]:
                 result_text = "\n" + textwrap.indent(results, "   $  ", predicate=lambda _: True)
 
             print_report_field("Result", result_text)
-            print(" |---")
+            print_divider()
         return results
 
     return wrapped
@@ -409,7 +417,73 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
     gateway.mcp.run(transport="sse")
 
 
-async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
+def print_assistant_message(text: str):
+    """
+    Display a formatted message from the code assistant.
+    """
+    field = "Assistant"
+    # Effective width = terminal width - length of formatted field - additional chars
+    single_line_width = textutil.TERMINAL_WIDTH - 14
+    if len(text.splitlines()) > 1 or len(text) >= single_line_width:
+        prefix = "   >  "
+        # If we wrap, we'll start a new line and the width available is different.
+        wrapping_width = textutil.TERMINAL_WIDTH - len(prefix)
+        text = "\n".join(
+            textwrap.wrap(
+                text, width=wrapping_width, drop_whitespace=False, replace_whitespace=False
+            )
+        )
+        text = "\n" + textwrap.indent(text, prefix=prefix, predicate=lambda _: True)
+    print_report_field(field, text)
+    print_divider()
+
+
+async def handle_claude_messages(stdout) -> str:
+    """
+    Handle streamed JSON messages from Claude until a final result, which is returned.
+    """
+    result = ""
+
+    async for line in stdout:
+        msg = json.loads(line)
+        if LOG_LEVEL == "DEBUG":
+            print("Message:", msg)
+
+        if msg.get("type") != "assistant":
+            # We only need to report things the code assistant did.
+            continue
+
+        # Gather relevant content for display (if any).
+        content = msg.get("message").get("content", [])
+        display_content = []
+        for c in content:
+            match c:
+                case {"type": "text", "text": text}:
+                    display_content.append(text)
+                case {"type": "tool_use", "name": tool_name} if not tool_name.startswith(
+                    "mcp__UDB_Server"
+                ):
+                    # Report use of other tools.
+                    args = "\n".join(f"    {k}='{v}'" for k, v in c.get("input").items())
+                    display_content.append(f"Tool use: {tool_name}\n{args}")
+
+        if not display_content:
+            # Nothing interesting to say.
+            continue
+
+        assistant_text = "\n".join(display_content)
+        if msg.get("message").get("stop_reason") == "end_turn":
+            # If it's the end of our session, don't display this - we'll return it as the final
+            # explanation.
+            result = assistant_text
+        else:
+            # Print an interim assistant message.
+            print_assistant_message(assistant_text)
+
+    return result
+
+
+async def _ask_claude(why: str, port: int, tools: list[str]) -> str:
     """
     Pose a question to an external `claude` program, supplying access to a UDB MCP server.
     """
@@ -417,7 +491,7 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
         print(f"Connecting Claude to MCP server on port {port}")
     else:
         console_whizz(f" * {random.choice(THINKING_MSGS)}...", end="\n")
-        print(" |---")
+        print_divider()
 
     mcp_config = {
         "mcpServers": {"UDB_Server": {"type": "sse", "url": f"http://localhost:{port}/sse"}}
@@ -429,9 +503,9 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
     allowed_tools = ",".join(f"mcp__UDB_Server__{t}" for t in tools)
 
     # If we're gathering debug logs then get as much feedback from Claude as possible.
-    debug_flags = ["--verbose", "-d"] if LOG_LEVEL == "DEBUG" else []
+    debug_flags = ["-d"] if LOG_LEVEL == "DEBUG" else []
 
-    stdout = b""
+    result = ""
     try:
         claude = await asyncio.create_subprocess_exec(
             "claude",
@@ -442,6 +516,9 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
             mcp_config_path,
             "--allowedTools",
             allowed_tools,
+            "--output-format",
+            "stream-json",
+            "--verbose",  # Required for --output-format stream-json
             "-p",
             why,
             "--system-prompt",
@@ -449,18 +526,24 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> bytes:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        assert claude.stdout and claude.stderr
 
-        stdout, _ = await claude.communicate()
+        result = await handle_claude_messages(claude.stdout)
+
+        stderr = await claude.stderr.read()
+        if stderr:
+            print("Errors:\n", stderr)
+
     finally:
         # Make sure Claude is properly cleaned up if we exited early.
         if claude.returncode is None:
             claude.terminate()
             await claude.wait()
 
-    return stdout
+    return result
 
 
-async def _explain(gateway: UdbMcpGateway, why: str) -> bytes:
+async def _explain(gateway: UdbMcpGateway, why: str) -> str:
     """
     Explain a query from the user using an external `claude` process + MCP.
     """
@@ -508,4 +591,4 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     # explanation = asyncio.run(_explain(gateway, why))
 
     console_whizz(" * Explanation:", end="\n")
-    print(textwrap.indent(explanation.decode("utf-8"), "   =  ", predicate=lambda _: True))
+    print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
