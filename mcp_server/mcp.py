@@ -424,6 +424,9 @@ class UdbMcpGateway:
         This should NOT be used to retrieve the value of GDB value history
         variables such as $0, $1, $2, etc.
 
+        Do NOT use the C comma "," operator to attempt to print multiple values. This will produce
+        misleading output. To print multiple values you should call the `print` tool once for each.
+
         Params:
         expression -- the expression to be evaluated.
         """
