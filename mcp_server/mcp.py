@@ -243,6 +243,26 @@ def chain_of_thought(
     return wrapped
 
 
+def revert_time_on_failure(
+    fn: Callable[Concatenate[UdbMcpGatewayAlias, P], T],
+) -> Callable[Concatenate[UdbMcpGatewayAlias, P], T]:
+    """
+    Decorator to ensure a tool does not change debugger time if an exception is thrown.
+    """
+
+    @functools.wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        t = self.udb.time.get_bookmarked()
+        try:
+            return fn(self, *args, **kwargs)
+        except:
+            # Revert time on failure so failed tool invocations don't affect state.
+            self.udb.time.goto(t)
+            raise
+
+    return wrapped
+
+
 class UdbMcpGateway:
     """
     Plumbing class to expose selected UDB functionality as a set of tools to an MCP server.
@@ -329,6 +349,7 @@ class UdbMcpGateway:
 
     @report
     @source_context
+    @revert_time_on_failure
     @chain_of_thought
     def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
         """
@@ -364,6 +385,8 @@ class UdbMcpGateway:
             assert target_start_bp.is_valid()
 
             while target_start_bp.hit_count == 0:
+                if self.udb.get_undodb_info().flags.at_event_log_start:
+                    raise Exception(f"Failed to reverse step into function {target_fn}.")
                 self.udb.execution.reverse_cont()
 
             # Check we really got to the function we intended.
