@@ -98,7 +98,7 @@ def print_divider() -> None:
     print(" |---")
 
 
-def report(fn: Callable[P, T]) -> Callable[P, T]:
+def report(fn: Callable[P, str | None]) -> Callable[P, str]:
     """
     Wrap a tool to report on the current thinking state (if appropriate) and result.
     """
@@ -123,6 +123,9 @@ def report(fn: Callable[P, T]) -> Callable[P, T]:
             results = str(e)
             raise e
         finally:
+            if results is None:
+                results = ""
+
             if len(results.splitlines()) == 1:
                 result_text = results
             else:
