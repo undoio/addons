@@ -574,14 +574,10 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> str:
 
     allowed_tools = ",".join(f"mcp__UDB_Server__{t}" for t in tools)
 
-    # If we're gathering debug logs then get as much feedback from Claude as possible.
-    debug_flags = ["-d"] if LOG_LEVEL == "DEBUG" else []
-
     result = ""
     try:
         claude = await asyncio.create_subprocess_exec(
             "claude",
-            *debug_flags,
             "--model",
             "opus",
             "--mcp-config",
