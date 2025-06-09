@@ -1,6 +1,6 @@
 import gdb
 
-from undodb.debugger_extensions import udb
+from undo.debugger_extensions import udb
 
 
 def count_calls(func_name):
