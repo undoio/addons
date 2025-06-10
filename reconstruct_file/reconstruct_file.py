@@ -18,7 +18,7 @@ from typing import Iterator, NoReturn, Optional
 
 import gdb
 
-from undodb.debugger_extensions import debugger_io, debugger_utils, udb
+from undo.debugger_extensions import debugger_io, debugger_utils, udb
 
 
 def iterate_events(condition: str) -> Iterator[None]:

@@ -3,7 +3,7 @@
 import sys
 import textwrap
 
-from undodb.udb_launcher import (
+from undo.udb_launcher import (
     REDIRECTION_COLLECT,
     UdbLauncher,
 )

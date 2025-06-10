@@ -8,7 +8,7 @@ Copyright (C) 2019 Undo Ltd
 
 import gdb
 
-from undodb.debugger_extensions import (
+from undo.debugger_extensions import (
     debugger_utils,
     udb,
 )
