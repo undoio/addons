@@ -422,10 +422,12 @@ class UdbMcpGateway:
         with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
             # Create a breakpoint on the start of the target function.
             target_start_bp = gdb.Breakpoint(target_fn, internal=True)
-            target_start_bp.thread = gdb.selected_thread().global_num
+            thread = gdb.selected_thread()
+            assert thread is not None
+            target_start_bp.thread = thread.global_num
             assert target_start_bp.is_valid()
 
-            while target_start_bp.hit_count == 0:
+            while not target_start_bp.hit_count:
                 if self.udb.get_undodb_info().flags.at_event_log_start:
                     raise Exception(f"Failed to reverse step into function {target_fn}.")
                 self.udb.execution.reverse_cont()
@@ -528,6 +530,9 @@ def run_server(gateway: UdbMcpGateway) -> None:
     if not event_loop:
         event_loop = asyncio.new_event_loop()
 
+    sock = None
+    server = None
+    mcp_task = None
     try:
         sock = socket.create_server(("localhost", 8000))
 
@@ -541,12 +546,15 @@ def run_server(gateway: UdbMcpGateway) -> None:
 
     finally:
         # Shut down the server once we have an explanation.
-        server.should_exit = True
-        tasks = asyncio.all_tasks(loop=event_loop)
-        for t in tasks:
-            t.cancel()
-        event_loop.run_until_complete(asyncio.wait([server.shutdown()] + list(tasks)))
-        sock.close()
+        if server:
+            server.should_exit = True
+        if server and mcp_task:
+            tasks = asyncio.all_tasks(loop=event_loop)
+            for t in tasks:
+                t.cancel()
+            event_loop.run_until_complete(asyncio.wait([server.shutdown()] + list(tasks)))
+        if sock:
+            sock.close()
 
 
 @command.register(gdb.COMMAND_USER)
@@ -624,7 +632,7 @@ async def handle_claude_messages(stdout) -> str:
     return result
 
 
-async def _ask_claude(why: str, port: int, tools: list[str]) -> str:
+async def ask_claude(why: str, port: int, tools: list[str]) -> str:
     """
     Pose a question to an external `claude` program, supplying access to a UDB MCP server.
     """
@@ -680,10 +688,13 @@ async def _ask_claude(why: str, port: int, tools: list[str]) -> str:
     return result
 
 
-async def _explain(gateway: UdbMcpGateway, why: str) -> str:
+async def explain_query(gateway: UdbMcpGateway, why: str) -> str:
     """
     Explain a query from the user using an external `claude` process + MCP.
     """
+    sock = None
+    server = None
+    mcp_task = None
     try:
         sock = socket.create_server(("localhost", 0))
         _, port = sock.getsockname()
@@ -695,14 +706,17 @@ async def _explain(gateway: UdbMcpGateway, why: str) -> str:
         mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
 
         # Ask Claude the question.
-        explanation = await _ask_claude(why, port, tools=gateway.tools)
+        explanation = await ask_claude(why, port, tools=gateway.tools)
 
     finally:
         # Shut down the server once we have an explanation.
-        server.should_exit = True
-        await server.shutdown()
-        await mcp_task
-        sock.close()
+        if server:
+            server.should_exit = True
+            await server.shutdown()
+        if mcp_task:
+            await mcp_task
+        if sock:
+            sock.close()
 
     return explanation
 
@@ -727,8 +741,7 @@ def explain(udb: udb_base.Udb, why: str) -> None:
 
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
     with udb.replay_standard_streams.temporary_set(False), gdbutils.breakpoints_suspended():
-        explanation = event_loop.run_until_complete(_explain(gateway, why))
-    # explanation = asyncio.run(_explain(gateway, why))
+        explanation = event_loop.run_until_complete(explain_query(gateway, why))
 
     console_whizz(" * Explanation:", end="\n")
     print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
