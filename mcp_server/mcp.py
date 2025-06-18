@@ -70,6 +70,12 @@ T = TypeVar("T")
 UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
 
 
+# Something in the webserver stack holds onto a reference to the event loop
+# after shutting down. It's easier to just using the same event loop for each
+# invocation.
+event_loop = None
+
+
 def console_whizz(msg: str, end: str = "") -> None:
     """
     Animated console display for major headings.
@@ -514,6 +520,34 @@ command.register_prefix(
     """,
 )
 
+def run_server(gateway: UdbMcpGateway) -> None:
+    """
+    Run an MCP server until interrupted or otherwise shut down.
+    """
+    global event_loop
+    if not event_loop:
+        event_loop = asyncio.new_event_loop()
+
+    try:
+        sock = socket.create_server(("localhost", 8000))
+
+        # Set up a temporary MCP server for this UDB session.
+        starlette_app = gateway.mcp.sse_app()
+        config = uvicorn.Config(starlette_app, log_level=LOG_LEVEL.lower())
+        server = uvicorn.Server(config)
+        mcp_task = event_loop.create_task(server.serve(sockets=[sock]))
+
+        event_loop.run_until_complete(mcp_task)
+
+    finally:
+        # Shut down the server once we have an explanation.
+        server.should_exit = True
+        tasks = asyncio.all_tasks(loop=event_loop)
+        for t in tasks:
+            t.cancel()
+        event_loop.run_until_complete(asyncio.wait([server.shutdown()] + list(tasks)))
+        sock.close()
+
 
 @command.register(gdb.COMMAND_USER)
 def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
@@ -521,7 +555,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
     Start an MCP server for this UDB instance.
     """
     gateway = UdbMcpGateway(udb)
-    gateway.mcp.run(transport="sse")
+    run_server(gateway)
 
 
 def print_assistant_message(text: str):
@@ -671,12 +705,6 @@ async def _explain(gateway: UdbMcpGateway, why: str) -> str:
         sock.close()
 
     return explanation
-
-
-# Something in the webserver stack holds onto a reference to the event loop
-# after shutting down. It's easier to just using the same event loop for each
-# invocation.
-event_loop = None
 
 
 @command.register(gdb.COMMAND_USER, arg_parser=command_args.Untokenized())
