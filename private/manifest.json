@@ -100,14 +100,15 @@
             "python_package_dir": "systemc_trace_packages",
             "version_min": "8.2.0"
         },
-	"mcp-server": {
-	    "description": "Expose Undo debug functionality as an MCP server.",
+	"explain": {
+	    "description": "Integrate Undo debug functionality using an MCP server.",
 	    "repo": "addons",
-	    "script": "mcp_server/mcp.py",
+	    "script": "explain/explain.py",
 	    "python_package_deps": [
-		"mcp[cli]"
+		"mcp[cli]",
+		"exceptiongroup"
 	    ],
-	    "python_package_dir": "mcp_server_packages",
+	    "python_package_dir": "explain_packages",
 	    "version_min": "8.2.0"
 	}
     }
