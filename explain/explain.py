@@ -599,6 +599,12 @@ async def handle_claude_messages(stdout) -> str:
         if LOG_LEVEL == "DEBUG":
             print("Message:", msg)
 
+        if msg.get("type") == "result":
+            # This should be the last message in the stream, allow us to fall out of the loop
+            # naturally and return it.
+            result = msg["result"]
+            continue
+
         if msg.get("type") != "assistant":
             # We only need to report things the code assistant did.
             continue
@@ -622,13 +628,8 @@ async def handle_claude_messages(stdout) -> str:
             continue
 
         assistant_text = "\n".join(display_content)
-        if msg.get("message").get("stop_reason") == "end_turn":
-            # If it's the end of our session, don't display this - we'll return it as the final
-            # explanation.
-            result = assistant_text
-        else:
-            # Print an interim assistant message.
-            print_assistant_message(assistant_text)
+        # Print an interim assistant message.
+        print_assistant_message(assistant_text)
 
     return result
 
