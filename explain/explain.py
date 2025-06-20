@@ -65,6 +65,7 @@ SYSTEM_PROMPT = (EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8"
 THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")[:-1]
 """Messages to display whilst the system is thinking."""
 
+CLAUDE_LOCAL_INSTALL_PATH = Path.home() / ".claude" / "local" / "claude"
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -634,7 +635,7 @@ async def handle_claude_messages(stdout) -> str:
     return result
 
 
-async def ask_claude(why: str, port: int, tools: list[str]) -> str:
+async def ask_claude(claude_bin: Path, why: str, port: int, tools: list[str]) -> str:
     """
     Pose a question to an external `claude` program, supplying access to a UDB MCP server.
     """
@@ -656,7 +657,7 @@ async def ask_claude(why: str, port: int, tools: list[str]) -> str:
     result = ""
     try:
         claude = await asyncio.create_subprocess_exec(
-            "claude",
+            str(claude_bin),
             "--model",
             "opus",
             "--mcp-config",
@@ -690,7 +691,7 @@ async def ask_claude(why: str, port: int, tools: list[str]) -> str:
     return result
 
 
-async def explain_query(gateway: UdbMcpGateway, why: str) -> str:
+async def explain_query(claude_bin: Path, gateway: UdbMcpGateway, why: str) -> str:
     """
     Explain a query from the user using an external `claude` process + MCP.
     """
@@ -708,7 +709,7 @@ async def explain_query(gateway: UdbMcpGateway, why: str) -> str:
         mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
 
         # Ask Claude the question.
-        explanation = await ask_claude(why, port, tools=gateway.tools)
+        explanation = await ask_claude(claude_bin, why, port, tools=gateway.tools)
 
     finally:
         # Shut down the server once we have an explanation.
@@ -728,7 +729,13 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     """
     Use AI to answer questions about the code.
     """
-    if not shutil.which("claude"):
+    claude_bin = None
+    if loc := shutil.which("claude"):
+        claude_bin = Path(loc)
+    elif CLAUDE_LOCAL_INSTALL_PATH.exists():
+        claude_bin = CLAUDE_LOCAL_INSTALL_PATH
+
+    if not claude_bin:
         print("Could not find `claude`.")
         print("Please ensure working install of Claude Code is available on your PATH.")
         return
