@@ -77,6 +77,9 @@ UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
 # invocation.
 event_loop = None
 
+claude_session = None
+"""Claude session, if an interaction has already begun."""
+
 
 def console_whizz(msg: str, end: str = "") -> None:
     """
@@ -610,9 +613,15 @@ async def handle_claude_messages(stdout) -> str:
             print("Message:", msg)
 
         if msg.get("type") == "result":
+            # Fetch the session ID so that we can resume our conversation next time.
+            global claude_session
+            claude_session = msg["session_id"]
+
+            # Stash the result so that we can print our overall explanation.
+            result = msg["result"]
+
             # This should be the last message in the stream, allow us to fall out of the loop
             # naturally and return it.
-            result = msg["result"]
             continue
 
         if msg.get("type") != "assistant":
@@ -667,6 +676,7 @@ async def ask_claude(claude_bin: Path, why: str, port: int, tools: list[str]) ->
     try:
         claude = await asyncio.create_subprocess_exec(
             str(claude_bin),
+            *(["--resume", claude_session] if claude_session else []),
             "--model",
             "opus",
             "--mcp-config",
