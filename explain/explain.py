@@ -565,7 +565,12 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
     Start an MCP server for this UDB instance.
     """
     gateway = UdbMcpGateway(udb)
-    run_server(gateway)
+    with (
+        gdbutils.temporary_parameter("pagination", False),
+        udb.replay_standard_streams.temporary_set(False),
+        gdbutils.breakpoints_suspended(),
+    ):
+        run_server(gateway)
 
 
 def print_assistant_message(text: str):
@@ -754,8 +759,12 @@ def explain(udb: udb_base.Udb, why: str) -> None:
         event_loop = asyncio.new_event_loop()
 
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
-    with udb.replay_standard_streams.temporary_set(False), gdbutils.breakpoints_suspended():
-        explanation = event_loop.run_until_complete(explain_query(gateway, why))
+    with (
+        gdbutils.temporary_parameter("pagination", False),
+        udb.replay_standard_streams.temporary_set(False),
+        gdbutils.breakpoints_suspended(),
+    ):
+        explanation = event_loop.run_until_complete(explain_query(claude_bin, gateway, why))
 
     console_whizz(" * Explanation:", end="\n")
     print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
