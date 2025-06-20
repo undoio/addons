@@ -524,6 +524,7 @@ command.register_prefix(
     """,
 )
 
+
 def run_server(gateway: UdbMcpGateway) -> None:
     """
     Run an MCP server until interrupted or otherwise shut down.
@@ -586,7 +587,10 @@ def print_assistant_message(text: str):
         wrapping_width = textutil.TERMINAL_WIDTH - len(prefix)
         text = "\n".join(
             textwrap.wrap(
-                text, width=wrapping_width, drop_whitespace=False, replace_whitespace=False
+                text,
+                width=wrapping_width,
+                drop_whitespace=False,
+                replace_whitespace=False,
             )
         )
         text = "\n" + textwrap.indent(text, prefix=prefix, predicate=lambda _: True)
