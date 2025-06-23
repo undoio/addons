@@ -1,5 +1,5 @@
 """
-MCP server extension for UDB.
+AI extension for UDB, providing an MCP server and a debug assistant using with Claude Code.
 
 Provides the commands:
 
@@ -24,7 +24,7 @@ import time
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Concatenate, ParamSpec, TypeAlias, TypeVar
+from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
 
 import gdb
 
@@ -81,7 +81,7 @@ claude_session = None
 """Claude session, if an interaction has already begun."""
 
 
-def console_whizz(msg: str, end: str = "") -> None:
+def console_whizz(msg: str, end: str = "\n") -> None:
     """
     Animated console display for major headings.
     """
@@ -116,7 +116,7 @@ def report(fn: Callable[P, str | None]) -> Callable[P, str]:
     """
 
     @functools.wraps(fn)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: Any, **kwargs: Any):
         formatted_name = fn.__name__.removeprefix("tool_").replace("_", "-")
         print_report_field("Operation", f"{formatted_name:15s}")
 
@@ -158,7 +158,7 @@ def collect_output(fn: Callable[P, None]) -> Callable[P, str]:
     """
 
     @functools.wraps(fn)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: Any, **kwargs: Any):
         with gdbio.CollectOutput() as collector:
             fn(*args, **kwargs)
 
@@ -234,7 +234,7 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
     """
 
     @functools.wraps(fn)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: Any, **kwargs: Any):
         out = fn(*args, **kwargs)
 
         frame = gdb.selected_frame()
@@ -267,7 +267,7 @@ def chain_of_thought(
     """
 
     @functools.wraps(fn)
-    def wrapped(self, hypothesis: str, *args, **kwargs):
+    def wrapped(self, hypothesis: str, *args: Any, **kwargs: Any):
         # pylint: disable=unused-argument
         return fn(self, *args, **kwargs)
 
@@ -297,7 +297,7 @@ def revert_time_on_failure(
     """
 
     @functools.wraps(fn)
-    def wrapped(self, *args, **kwargs):
+    def wrapped(self, *args: Any, **kwargs: Any):
         t = self.udb.time.get_bookmarked()
         try:
             return fn(self, *args, **kwargs)
@@ -660,7 +660,7 @@ async def ask_claude(claude_bin: Path, why: str, port: int, tools: list[str]) ->
     if LOG_LEVEL == "debug":
         print(f"Connecting Claude to MCP server on port {port}")
     else:
-        console_whizz(f" * {random.choice(THINKING_MSGS)}...", end="\n")
+        console_whizz(f" * {random.choice(THINKING_MSGS)}...")
         print_divider()
 
     mcp_config = {
@@ -780,5 +780,5 @@ def explain(udb: udb_base.Udb, why: str) -> None:
     ):
         explanation = event_loop.run_until_complete(explain_query(claude_bin, gateway, why))
 
-    console_whizz(" * Explanation:", end="\n")
+    console_whizz(" * Explanation:")
     print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
