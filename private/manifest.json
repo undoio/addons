@@ -105,7 +105,7 @@
 	    "repo": "addons",
 	    "script": "explain/explain.py",
 	    "python_package_deps": [
-		"mcp[cli]",
+		"mcp[cli]==1.9.4",
 		"exceptiongroup"
 	    ],
 	    "python_package_dir": "explain_packages",
