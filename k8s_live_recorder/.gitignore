@@ -1,0 +1,10 @@
+# VSCode
+.vscode/
+.history/
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+.env
+.env.*
