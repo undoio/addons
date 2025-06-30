@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-go-app-deployment
+  labels:
+    app: broken-go-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broken-go-app
+  template:
+    metadata:
+      labels:
+        app: broken-go-app
+    spec:
+      shareProcessNamespace: true  # This allows the sidecar to see the processes of the main container
+      volumes:
+        - name: recordings-storage
+          emptyDir: {}
+        - name: shared-tmp-volume
+          emptyDir: {}
+      containers:
+        # This container is the broken Go application that we want to record
+        - name: broken-go-app
+          image: undo/broken-go-app:latest
+          imagePullPolicy: Always
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
+          ports:
+            - containerPort: 8080
+              name: broken-go-app
+              protocol: TCP
+          volumeMounts:
+            - name: recordings-storage
+              mountPath: /recordings
+            - name: shared-tmp-volume 
+              mountPath: /tmp
+        # This container is the Undo sidecar that will record the process
+        - name: undo-lr-sidecar
+          image: undo/undo-lr-sidecar:latest
+          imagePullPolicy: Always
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
+          volumeMounts:
+            - name: recordings-storage
+              mountPath: /recordings
+            - name: shared-tmp-volume
+              mountPath: /tmp
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: APP_PROCESS_NAME
+              value: "broken-go-app"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: S3_BUCKET_NAME
+            - name: S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: S3_REGION
+            - name: S3_KEY_PREFIX
+              value: "recordings"
