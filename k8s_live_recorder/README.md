@@ -2,7 +2,7 @@
 
 This is a demo of Undo's [LiveRecorder](https://docs.undo.io/UsingTheLiveRecorderTool.html) recording an application in a Kubernetes pod.
 LiveRecorder is hosted in a sidecar container that runs alongside the main application container in the same pod.
-A wrapper applicatin monitors for specific annotations, and starts the recording of the main application process when instructed. 
+A wrapper application monitors for specific annotations, and starts the recording of the main application process when instructed. 
 As LiveRecorder is hosted in a sidecar container no changes are needed to be made to the existing main application container.
 When recording has stopped, the resultant *.undo file is then uploaded to an S3 bucket.
 
@@ -22,7 +22,7 @@ Minikube is used for demonstration purposes.
 1. `alias kubectl="minikube kubectl --"` (for convenience)
 1. `eval $(minikube -p minikube docker-env)`
 1. `docker buildx build --platform linux/amd64 -t undo/broken-go-app:latest -f app/Dockerfile app --load`
-1. `docker buildx build --platform=linux/amd64 -t undo/undo-lr-sidecar:latest -f sidecar/Dockerfile sidecar --load`
+1. `docker buildx build --platform linux/amd64 -t undo/undo-lr-sidecar:latest -f sidecar/Dockerfile sidecar --load`
 1. Create the required secrets for AWS credentials:
    ```
    kubectl create secret generic s3 \
