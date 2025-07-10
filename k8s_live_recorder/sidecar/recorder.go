@@ -21,19 +21,16 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// Annotation keys
 const (
 	liveRecordAnnotation = "undo.io/live-record" // annotation for start and stop
 	statusAnnotation     = "undo.io/status"      // annotation for status
 	pollInterval         = 5 * time.Second
 )
 
-// Status enum values
 type Status string
 
 const (
 	StatusBusy Status = "busy"
-	StatusIdle Status = "idle"
 )
 
 type RecorderController struct {
@@ -60,7 +57,7 @@ func newRecorderController(cfg *Config) (*RecorderController, error) {
 	}, nil
 }
 
-func (rc *RecorderController) Run(ctx context.Context, targetPID int) error {
+func (rc *RecorderController) Run(ctx context.Context) error {
 	log.Println("Starting recorder controller loop")
 	log.Println("Waiting for instruction...")
 	time.Sleep(5 * time.Second)
@@ -73,19 +70,19 @@ func (rc *RecorderController) Run(ctx context.Context, targetPID int) error {
 		case <-ctx.Done():
 			rc.stopRecording()
 			// Clear status on shutdown
-			if err := rc.setAnnotation(ctx, statusAnnotation, string(StatusIdle)); err != nil {
+			if err := rc.clearAnnotation(ctx, statusAnnotation); err != nil {
 				log.Printf("Warning: Failed to clear status on shutdown: %v", err)
 			}
 			return ctx.Err()
 		case <-ticker.C:
-			if err := rc.checkAnnotation(ctx, targetPID); err != nil {
+			if err := rc.checkAnnotation(ctx); err != nil {
 				log.Printf("Error checking annotations: %v", err)
 			}
 		}
 	}
 }
 
-func (rc *RecorderController) checkAnnotation(ctx context.Context, targetPID int) error {
+func (rc *RecorderController) checkAnnotation(ctx context.Context) error {
 	pod, err := rc.clientset.CoreV1().Pods(rc.config.Namespace).Get(
 		ctx, rc.config.PodName, metav1.GetOptions{})
 	if err != nil {
@@ -100,8 +97,8 @@ func (rc *RecorderController) checkAnnotation(ctx context.Context, targetPID int
 	if value, exists := annotations[liveRecordAnnotation]; exists {
 
 		if value == "" {
-            return nil
-        }
+			return nil
+		}
 
 		rc.recordingLock.Lock()
 		defer rc.recordingLock.Unlock()
@@ -109,7 +106,7 @@ func (rc *RecorderController) checkAnnotation(ctx context.Context, targetPID int
 		switch value {
 		case "start":
 			if rc.recordingProcess == nil {
-				if err := rc.startRecording(ctx, targetPID); err != nil {
+				if err := rc.startRecording(ctx); err != nil {
 					return wrapErr("starting recording", err)
 				}
 				log.Println("Recording started successfully")
@@ -135,11 +132,20 @@ func (rc *RecorderController) checkAnnotation(ctx context.Context, targetPID int
 	return nil
 }
 
-func (rc *RecorderController) startRecording(ctx context.Context, targetPID int) error {
-	// Set status to busy when recording starts
+func (rc *RecorderController) startRecording(ctx context.Context) error {
 	if err := rc.setAnnotation(ctx, statusAnnotation, string(StatusBusy)); err != nil {
 		log.Printf("Warning: Failed to set busy status: %v", err)
 	}
+
+	currentPID, err := findTargetProcess(rc.config.AppProcessName)
+	if err != nil {
+		if statusErr := rc.clearAnnotation(ctx, statusAnnotation); statusErr != nil {
+			log.Printf("Warning: Failed to clear status after process lookup failure: %v", statusErr)
+		}
+		return wrapErr("finding current target process", err)
+	}
+
+	log.Printf("Found current PID %d for process %s", currentPID, rc.config.AppProcessName)
 
 	timestamp := time.Now().Format("20060102-150405")
 	recordingFile := filepath.Join(
@@ -154,7 +160,7 @@ func (rc *RecorderController) startRecording(ctx context.Context, targetPID int)
 	cmd := exec.CommandContext(
 		ctx,
 		liveRecordPath,
-		"-p", strconv.Itoa(targetPID),
+		"-p", strconv.Itoa(currentPID),
 		"--recording-file", recordingFile,
 	)
 
@@ -170,7 +176,7 @@ func (rc *RecorderController) startRecording(ctx context.Context, targetPID int)
 	}
 
 	rc.recordingProcess = cmd
-	log.Printf("Recording started for PID %d to file %s", targetPID, recordingFile)
+	log.Printf("Recording started for PID %d to file %s", currentPID, recordingFile)
 
 	go func() {
 		log.Println("Monitoring live-record process...")

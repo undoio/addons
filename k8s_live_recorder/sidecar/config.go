@@ -57,15 +57,20 @@ func loadConfig() (*Config, error) {
 			&MissingEnvError{EnvVar: podNameEnv})
 	}
 
-	if cfg.S3BucketName != "" {
-		if cfg.AWSAccessKeyID == "" {
-			return nil, wrapErr("validating AWS credentials",
-				&MissingEnvError{EnvVar: awsAccessKeyIDEnv})
-		}
-		if cfg.AWSSecretAccessKey == "" {
-			return nil, wrapErr("validating AWS credentials",
-				&MissingEnvError{EnvVar: awsSecretAccessEnv})
-		}
+	// AWS S3 credentials are now required for the app to start
+	if cfg.S3BucketName == "" {
+		return nil, wrapErr("validating S3 configuration",
+			&MissingEnvError{EnvVar: s3BucketNameEnv})
+	}
+
+	if cfg.AWSAccessKeyID == "" {
+		return nil, wrapErr("validating AWS credentials",
+			&MissingEnvError{EnvVar: awsAccessKeyIDEnv})
+	}
+
+	if cfg.AWSSecretAccessKey == "" {
+		return nil, wrapErr("validating AWS credentials",
+			&MissingEnvError{EnvVar: awsSecretAccessEnv})
 	}
 
 	return cfg, nil

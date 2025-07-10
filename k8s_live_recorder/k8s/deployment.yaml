@@ -14,18 +14,18 @@ spec:
       labels:
         app: broken-go-app
     spec:
-      serviceAccountName: default  # Use the default service account with RBAC permissions
-      shareProcessNamespace: true  # This allows the sidecar to see the processes of the main container
+      serviceAccountName: default # Use the default service account with RBAC permissions
+      shareProcessNamespace: true # This allows the sidecar to see the processes of the main container
       volumes:
         - name: recordings-storage
           emptyDir: {}
         - name: shared-tmp-volume
           emptyDir: {}
+
       containers:
-        # This container is the broken Go application that we want to record
-        - name: broken-go-app
+        - name: broken-go-app # This container is the broken Go application that we want to record
           image: undo/broken-go-app:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             capabilities:
               add: ["SYS_PTRACE"]
@@ -33,40 +33,93 @@ spec:
             - containerPort: 8080
               name: broken-go-app
               protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10 # Purposefully low for demonstration purposes
+            periodSeconds: 5 # Purposefully low for demonstration purposes
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          resources: # Arbitrary resource requests and limits for the main application container
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
           lifecycle:
-            preStop:  # preStop hook to wait for the undo.io/status annotation to be set to 'idle',
-                      # to ensure recordings are uploaded before shutdown
+            preStop: # preStop hook to wait for the undo.io/status annotation to be set to 'idle',
+              # to ensure recordings are uploaded before shutdown
               exec:
                 command:
                   - /bin/sh
                   - -c
                   - |
-                    echo "PreStop hook: Waiting for undo.io/status annotation to be set to 'idle'..."
+                    echo "PreStop hook: Waiting for undo.io/status annotation to be empty..."
+                    TIMEOUT=300  # 5 minutes timeout
+                    ELAPSED=0
+                    K8S_API_SERVER="https://kubernetes.default.svc"
                     TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
                     NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
-                    while true; do
-                      STATUS=$(curl -s -k -H "Authorization: Bearer $TOKEN" \
-                        "https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/pods/$HOSTNAME" | \
-                        grep -o '"undo.io/status":"[^"]*"' | cut -d'"' -f4 || echo "")
-                      if [ "$STATUS" = "idle" ]; then
-                        echo "PreStop hook: undo.io/status annotation is now 'idle', allowing container shutdown"
-                        break
+
+                    while [ $ELAPSED -lt $TIMEOUT ]; do
+                      # Use wget to query Kubernetes API for pod annotations
+                      if RESPONSE=$(wget -q -O - --timeout=10 \
+                        --header="Authorization: Bearer $TOKEN" \
+                        --header="Accept: application/json" \
+                        --no-check-certificate \
+                        "$K8S_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$HOSTNAME" 2>/dev/null); then
+                        
+                        # Extract status annotation using basic text processing
+                        STATUS=$(echo "$RESPONSE" | grep -o '"undo.io/status":"[^"]*"' | cut -d'"' -f4)
+                        
+                        if [ -z "$STATUS" ]; then
+                          echo "PreStop hook: undo.io/status annotation is now empty, allowing container shutdown"
+                          exit 0
+                        fi
+                        echo "PreStop hook: Current status: '$STATUS', waiting for empty annotation... (${ELAPSED}s elapsed)"
+                      else
+                        echo "PreStop hook: Failed to get pod status via wget, retrying... (${ELAPSED}s elapsed)"
                       fi
-                      echo "PreStop hook: Current status: '$STATUS', waiting for 'idle'..."
                       sleep 2
+                      ELAPSED=$((ELAPSED + 2))
                     done
+                    echo "PreStop hook: Timeout reached, proceeding with shutdown"
+                    exit 1
           volumeMounts:
             - name: recordings-storage
               mountPath: /recordings
             - name: shared-tmp-volume
               mountPath: /tmp
-        # This container is the Undo sidecar that will record the process
-        - name: undo-lr-sidecar
+
+      initContainers:
+        - name: undo-lr-sidecar # This init container sets up the Undo sidecar that will record the process
           image: undo/undo-lr-sidecar:latest
-          imagePullPolicy: Always
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             capabilities:
               add: ["SYS_PTRACE"]
+          resources: # Arbitrary resource requests and limits for the sidecar
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
           volumeMounts:
             - name: recordings-storage
               mountPath: /recordings
@@ -105,3 +158,4 @@ spec:
                   key: S3_REGION
             - name: S3_KEY_PREFIX
               value: "recordings"
+

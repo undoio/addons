@@ -80,8 +80,8 @@ func copyTargetExecutable(targetPID int) error {
 }
 
 type SharedLibrary struct {
-	Path     string 
-	RealPath string 
+	Path     string
+	RealPath string
 }
 
 func copySharedLibraries(targetPID int) error {
@@ -128,7 +128,7 @@ func getSharedLibraries(targetPID int) ([]SharedLibrary, error) {
 		}
 
 		pathname := fields[5]
-		
+
 		if !isSharedLibrary(pathname) {
 			continue
 		}
@@ -182,7 +182,7 @@ func isSharedLibrary(pathname string) bool {
 func resolveLibraryPath(targetPID int, libPath string) (string, error) {
 
 	procRootPath := filepath.Join("/proc", strconv.Itoa(targetPID), "root", libPath)
-	
+
 	if _, err := os.Stat(procRootPath); err != nil {
 		return "", wrapErr("checking library file", err)
 	}

@@ -20,9 +20,9 @@ Minikube is used for demonstration purposes.
 1. Copy `live-record` binary and `undolr/` folder to `sidecar/` dir.
 1. `minikube start`
 1. `alias kubectl="minikube kubectl --"` (for convenience)
-1. `eval $(minikube -p minikube docker-env)`
-1. `docker buildx build --platform linux/amd64 -t undo/broken-go-app:latest -f app/Dockerfile app --load`
-1. `docker buildx build --platform linux/amd64 -t undo/undo-lr-sidecar:latest -f sidecar/Dockerfile sidecar --load`
+1. Use minikube image registry `eval $(minikube docker-env)`
+1. `docker buildx build -t undo/broken-go-app:latest -f app/Dockerfile app --load`
+1. `docker buildx build -t undo/undo-lr-sidecar:latest -f sidecar/Dockerfile sidecar --load`
 1. Create the required secrets for AWS credentials:
    ```
    kubectl create secret generic s3 \
@@ -35,6 +35,7 @@ Minikube is used for demonstration purposes.
 1. `kubectl apply -f k8s/recorder-rolebinding.yaml`
 1. `kubectl apply -f k8s/deployment.yaml`
 1. `kubectl apply -f k8s/service.yaml`
+1. (To restart deployment and redeploy containers `kubectl rollout restart deployment/broken-go-app-deployment`)
 
 ## Test Demo
 
@@ -42,14 +43,15 @@ This very simple demo will show you how to record an application that crashes, g
 
 1. Check containers and programs are running:
 ```
+  kubectl get pods -l app=broken-go-app -o wide
+  kubectl describe pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
   kubectl logs $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') -c undo-lr-sidecar
   kubectl logs $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') -c broken-go-app
 ```
-1. `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=start --overwrite || true` 
-1. `minikube service broken-go-app-service --url` - use returned URL:PORT for curl request
-1. curl -s "http:URL:PORT/crash"
-1. `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=stop --overwrite || true` 
+1. Start recording `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=start --overwrite || true`
+1. Make the target application crash `curl -s "$(minikube service broken-go-app-service --url)/crash"`
+1. Stop recording `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=stop --overwrite || true` - NOTE: due to livenessProbe restarting the broken-go-app container
 
-1. aws s3 ls s3://S3-BUCKET-NAME/recordings/
-1. aws s3 cp s3://S3-BUCKET-NAME/recordings/RECORDING-FILE-NAME.undo .
-1. dlv replay RECORDING-FILE-NAME.undo
+1. List uploaded recordings `aws s3 ls s3://S3-BUCKET-NAME/recordings/`
+1. Copy recording to local machine `aws s3 cp s3://S3-BUCKET-NAME/recordings/RECORDING-FILE-NAME.undo .`
+1. Use Delve to replay recording `dlv replay RECORDING-FILE-NAME.undo`
