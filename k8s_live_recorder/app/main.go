@@ -1,12 +1,13 @@
+// HTTP server with purposeful crash endpoint for testing LiveRecorder in Kubernetes
 package main
 
 import (
-    "database/sql"
-    "fmt"
-    "net/http"
-    "time"
-    
-    _ "github.com/mattn/go-sqlite3" // SQLite driver (uses CGO and shared libraries)
+	"database/sql"
+	"fmt"
+	"net/http"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3" // SQLite driver (uses CGO and shared libraries)
 )
 
 var db *sql.DB
@@ -70,11 +71,11 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if database is accessible
 	err := db.Ping()
 	if err != nil {
-	    w.WriteHeader(http.StatusServiceUnavailable)
-	    fmt.Fprintf(w, "Database connection failed: %v", err)
-	    return
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "Database connection failed: %v", err)
+		return
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "OK")
 }
@@ -111,6 +112,6 @@ func main() {
 	fmt.Println("  / - Hello World with SQLite message")
 	fmt.Println("  /db - Show all database messages")
 	fmt.Println("  /health - Health check endpoint")
-    fmt.Println("  /crash - Trigger SIGSEGV")
+	fmt.Println("  /crash - Trigger SIGSEGV")
 	http.ListenAndServe(":8080", nil)
 }

@@ -10,9 +10,9 @@ Minikube is used for demonstration purposes.
 
 ## Requirements
 
-- Minikube[https://minikube.sigs.k8s.io/docs/]
+- [Minikube](https://minikube.sigs.k8s.io/docs/)
 - AWS credentials for S3 upload
-- `live-record` binary and `undolr/` folder
+- `live-record` binary and `undolr/` folder from an Undo release. Obtain a [free trail here](https://undo.io/udb-free-trial/).
 
 
 ## Setup
