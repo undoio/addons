@@ -217,12 +217,8 @@ func copySharedLibrary(lib SharedLibrary) error {
 }
 
 func isDigit(s string) bool {
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+	_, err := strconv.ParseInt(s, 10, 64)
+	return err == nil
 }
 
 func logAvailableProcesses() {
