@@ -46,17 +46,34 @@ func (rc *RecorderController) checkAndUploadRecordings(ctx context.Context) {
 
 	if rc.config.S3BucketName == "" {
 		log.Println("S3 bucket not configured - skipping upload")
+		// Clear status if no S3 bucket is configured and files exist
+		// This handles the case where recording completed but upload is disabled
+		if err := rc.clearAnnotation(ctx, statusAnnotation); err != nil {
+			log.Printf("Warning: Failed to clear status after skipping upload: %v", err)
+		}
 		return
 	}
 
 	log.Printf("Found %d recording file(s) to upload", len(files))
+	
+	successfulUploads := 0
 	for _, file := range files {
 		if err := rc.uploadFileToS3(file); err != nil {
 			log.Printf("Error uploading file %s: %v", file, err)
 			continue
 		}
+		successfulUploads++
 	}
 
+	// Clear status only if all files were successfully uploaded
+	if successfulUploads == len(files) {
+		if err := rc.clearAnnotation(ctx, statusAnnotation); err != nil {
+			log.Printf("Warning: Failed to clear status after successful uploads: %v", err)
+		}
+		log.Println("All recordings uploaded successfully, status cleared")
+	} else if successfulUploads > 0 {
+		log.Printf("Partial upload success: %d/%d files uploaded, keeping busy status", successfulUploads, len(files))
+	}
 }
 
 func (rc *RecorderController) findRecordingFiles() ([]string, error) {

@@ -14,6 +14,7 @@ spec:
       labels:
         app: broken-go-app
     spec:
+      serviceAccountName: default  # Use the default service account with RBAC permissions
       shareProcessNamespace: true  # This allows the sidecar to see the processes of the main container
       volumes:
         - name: recordings-storage
@@ -32,10 +33,32 @@ spec:
             - containerPort: 8080
               name: broken-go-app
               protocol: TCP
+          lifecycle:
+            preStop:  # preStop hook to wait for the undo.io/status annotation to be set to 'idle',
+                      # to ensure recordings are uploaded before shutdown
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "PreStop hook: Waiting for undo.io/status annotation to be set to 'idle'..."
+                    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                    NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+                    while true; do
+                      STATUS=$(curl -s -k -H "Authorization: Bearer $TOKEN" \
+                        "https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/pods/$HOSTNAME" | \
+                        grep -o '"undo.io/status":"[^"]*"' | cut -d'"' -f4 || echo "")
+                      if [ "$STATUS" = "idle" ]; then
+                        echo "PreStop hook: undo.io/status annotation is now 'idle', allowing container shutdown"
+                        break
+                      fi
+                      echo "PreStop hook: Current status: '$STATUS', waiting for 'idle'..."
+                      sleep 2
+                    done
           volumeMounts:
             - name: recordings-storage
               mountPath: /recordings
-            - name: shared-tmp-volume 
+            - name: shared-tmp-volume
               mountPath: /tmp
         # This container is the Undo sidecar that will record the process
         - name: undo-lr-sidecar

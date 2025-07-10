@@ -24,7 +24,16 @@ import (
 // Annotation keys
 const (
 	liveRecordAnnotation = "undo.io/live-record" // annotation for start and stop
+	statusAnnotation     = "undo.io/status"      // annotation for status
 	pollInterval         = 5 * time.Second
+)
+
+// Status enum values
+type Status string
+
+const (
+	StatusBusy Status = "busy"
+	StatusIdle Status = "idle"
 )
 
 type RecorderController struct {
@@ -63,6 +72,10 @@ func (rc *RecorderController) Run(ctx context.Context, targetPID int) error {
 		select {
 		case <-ctx.Done():
 			rc.stopRecording()
+			// Clear status on shutdown
+			if err := rc.setAnnotation(ctx, statusAnnotation, string(StatusIdle)); err != nil {
+				log.Printf("Warning: Failed to clear status on shutdown: %v", err)
+			}
 			return ctx.Err()
 		case <-ticker.C:
 			if err := rc.checkAnnotation(ctx, targetPID); err != nil {
@@ -123,6 +136,11 @@ func (rc *RecorderController) checkAnnotation(ctx context.Context, targetPID int
 }
 
 func (rc *RecorderController) startRecording(ctx context.Context, targetPID int) error {
+	// Set status to busy when recording starts
+	if err := rc.setAnnotation(ctx, statusAnnotation, string(StatusBusy)); err != nil {
+		log.Printf("Warning: Failed to set busy status: %v", err)
+	}
+
 	timestamp := time.Now().Format("20060102-150405")
 	recordingFile := filepath.Join(
 		recordingsDir,
@@ -144,6 +162,10 @@ func (rc *RecorderController) startRecording(ctx context.Context, targetPID int)
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
+		// Clear status if recording fails to start
+		if statusErr := rc.clearAnnotation(ctx, statusAnnotation); statusErr != nil {
+			log.Printf("Warning: Failed to clear status after recording start failure: %v", statusErr)
+		}
 		return wrapErr("starting live-record process", err)
 	}
 
@@ -178,7 +200,7 @@ func (rc *RecorderController) stopRecording() {
 	}
 }
 
-func (rc *RecorderController) clearAnnotation(ctx context.Context, key string) {
+func (rc *RecorderController) clearAnnotation(ctx context.Context, key string) error {
 	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":""}}}`, key))
 	_, err := rc.clientset.CoreV1().Pods(rc.config.Namespace).Patch(
 		ctx,
@@ -190,4 +212,20 @@ func (rc *RecorderController) clearAnnotation(ctx context.Context, key string) {
 	if err != nil {
 		log.Printf("Error clearing annotation %s: %v", key, err)
 	}
+	return err
+}
+
+func (rc *RecorderController) setAnnotation(ctx context.Context, key string, value string) error {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, key, value))
+	_, err := rc.clientset.CoreV1().Pods(rc.config.Namespace).Patch(
+		ctx,
+		rc.config.PodName,
+		types.StrategicMergePatchType,
+		patch,
+		metav1.PatchOptions{},
+	)
+	if err != nil {
+		log.Printf("Error setting %s to %s: %v", key, value, err)
+	}
+	return err
 }

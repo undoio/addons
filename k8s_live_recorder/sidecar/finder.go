@@ -93,7 +93,7 @@ func copySharedLibraries(targetPID int) error {
 	fmt.Printf("Found %d shared libraries to copy\n", len(libs))
 
 	for _, lib := range libs {
-		if err := copySharedLibrary(targetPID, lib); err != nil {
+		if err := copySharedLibrary(lib); err != nil {
 			fmt.Printf("Warning: failed to copy library %s: %v\n", lib.Path, err)
 			// Continue with other libraries instead of failing completely
 		} else {
@@ -190,7 +190,7 @@ func resolveLibraryPath(targetPID int, libPath string) (string, error) {
 	return procRootPath, nil
 }
 
-func copySharedLibrary(targetPID int, lib SharedLibrary) error {
+func copySharedLibrary(lib SharedLibrary) error {
 
 	destDir := filepath.Dir(lib.Path)
 	if err := os.MkdirAll(destDir, 0755); err != nil {
