@@ -29,6 +29,7 @@ from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
 import gdb
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.prompts import Prompt
 
 from src.udbpy import textutil, ui
 from src.udbpy.fileutil import mkstemp
@@ -326,11 +327,22 @@ class UdbMcpGateway:
 
     def _register_tools(self) -> None:
         for name, fn in inspect.getmembers(self, inspect.ismethod):
-            if not name.startswith("tool_"):
+            if name.startswith("tool_"):
+                name = name.removeprefix("tool_")
+                self.tools.append(name)
+                self.mcp.add_tool(fn=fn, name=name, description=fn.__doc__)
+            elif name.startswith("prompt_"):
+                name = name.removeprefix("prompt_")
+                prompt = Prompt.from_function(fn, name=name, description=fn.__doc__)
+                self.mcp.add_prompt(prompt)
+            else:
                 continue
-            name = name.removeprefix("tool_")
-            self.tools.append(name)
-            self.mcp.add_tool(fn=fn, name=name, description=fn.__doc__)
+
+    def prompt_explain(self, question):
+        """
+        Answer a user's question about the code.
+        """
+        return "\n".join([SYSTEM_PROMPT, question])
 
     @report
     @source_context
