@@ -528,7 +528,7 @@ command.register_prefix(
 )
 
 
-def run_server(gateway: UdbMcpGateway) -> None:
+def run_server(gateway: UdbMcpGateway, port: int) -> None:
     """
     Run an MCP server until interrupted or otherwise shut down.
     """
@@ -540,7 +540,7 @@ def run_server(gateway: UdbMcpGateway) -> None:
     server = None
     mcp_task = None
     try:
-        sock = socket.create_server(("localhost", 8000))
+        sock = socket.create_server(("localhost", port))
 
         # Set up a temporary MCP server for this UDB session.
         starlette_app = gateway.mcp.sse_app()
@@ -548,6 +548,11 @@ def run_server(gateway: UdbMcpGateway) -> None:
         server = uvicorn.Server(config)
         mcp_task = event_loop.create_task(server.serve(sockets=[sock]))
 
+        print(f"MCP server running on http://localhost:{port}/sse")
+        print(
+            f"Use ^C to stop and return to the UDB prompt "
+            f"(this will break the connection to your MCP client)."
+        )
         event_loop.run_until_complete(mcp_task)
 
     finally:
@@ -563,8 +568,17 @@ def run_server(gateway: UdbMcpGateway) -> None:
             sock.close()
 
 
-@command.register(gdb.COMMAND_USER)
-def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
+@command.register(
+    gdb.COMMAND_USER,
+    arg_parser=command_args.DashArgs(
+        command_args.Option(
+            long="port",
+            short="p",
+            value=command_args.Integer(purpose="port", default=8000, minimum=0),
+        ),
+    ),
+)
+def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
     """
     Start an MCP server for this UDB instance.
     """
@@ -574,7 +588,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb) -> None:
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
     ):
-        run_server(gateway)
+        run_server(gateway, args.port)
 
 
 def print_assistant_message(text: str):
