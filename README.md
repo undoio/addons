@@ -25,6 +25,9 @@ Counts how many times each function was called in the specificed period of time.
 [**Follow fork**](follow_fork/README.md)
 Allows live-record to record both parent and child after `fork()` has been called.
 
+[**LiveRecorder in Kubernetes**](k8s_live_recorder/README.md)
+A demo of how to record an application in a Kubernetes pod using live-record.
+
 [**Load Debug Symbols**](load_debug_symbols/README.md)
 Loads debug symbols by parsing the relevant section addresses.
 

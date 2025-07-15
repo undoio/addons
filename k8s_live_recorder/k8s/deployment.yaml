@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-go-app-deployment
+  labels:
+    app: broken-go-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broken-go-app
+  template:
+    metadata:
+      labels:
+        app: broken-go-app
+    spec:
+      serviceAccountName: default # Use the default service account with RBAC permissions
+      shareProcessNamespace: true # This allows the sidecar to see the processes of the main container
+      volumes:
+        - name: recordings-storage
+          emptyDir: {}
+        - name: shared-tmp-volume
+          emptyDir: {}
+
+      containers:
+        - name: broken-go-app # This container is the broken Go application that we want to record
+          image: undo/broken-go-app:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
+          ports:
+            - containerPort: 8080
+              name: broken-go-app
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10 # Purposefully low for demonstration purposes
+            periodSeconds: 5 # Purposefully low for demonstration purposes
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          resources: # Arbitrary resource requests and limits for the main application container
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          lifecycle:
+            preStop: # preStop hook to wait for the undo.io/status annotation to be set to 'idle',
+              # to ensure recordings are uploaded before shutdown
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "PreStop hook: Waiting for undo.io/status annotation to be empty..."
+                    TIMEOUT=300  # 5 minutes timeout
+                    ELAPSED=0
+                    K8S_API_SERVER="https://kubernetes.default.svc"
+                    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                    NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+
+                    while [ $ELAPSED -lt $TIMEOUT ]; do
+                      # Use wget to query Kubernetes API for pod annotations
+                      if RESPONSE=$(wget -q -O - --timeout=10 \
+                        --header="Authorization: Bearer $TOKEN" \
+                        --header="Accept: application/json" \
+                        --no-check-certificate \
+                        "$K8S_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$HOSTNAME" 2>/dev/null); then
+                        
+                        # Extract status annotation using basic text processing
+                        STATUS=$(echo "$RESPONSE" | grep -o '"undo.io/status":"[^"]*"' | cut -d'"' -f4)
+                        
+                        if [ -z "$STATUS" ]; then
+                          echo "PreStop hook: undo.io/status annotation is now empty, allowing container shutdown"
+                          exit 0
+                        fi
+                        echo "PreStop hook: Current status: '$STATUS', waiting for empty annotation... (${ELAPSED}s elapsed)"
+                      else
+                        echo "PreStop hook: Failed to get pod status via wget, retrying... (${ELAPSED}s elapsed)"
+                      fi
+                      sleep 2
+                      ELAPSED=$((ELAPSED + 2))
+                    done
+                    echo "PreStop hook: Timeout reached, proceeding with shutdown"
+                    exit 1
+          volumeMounts:
+            - name: recordings-storage
+              mountPath: /recordings
+            - name: shared-tmp-volume
+              mountPath: /tmp
+
+      initContainers:
+        - name: undo-lr-sidecar # This init container sets up the Undo sidecar that will record the process
+          image: undo/undo-lr-sidecar:latest
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
+          resources: # Arbitrary resource requests and limits for the sidecar
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: recordings-storage
+              mountPath: /recordings
+            - name: shared-tmp-volume
+              mountPath: /tmp
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: APP_PROCESS_NAME
+              value: "broken-go-app"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: S3_BUCKET_NAME
+            - name: S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: s3
+                  key: S3_REGION
+            - name: S3_KEY_PREFIX
+              value: "recordings"
+
