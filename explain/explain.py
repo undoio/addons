@@ -29,7 +29,7 @@ import gdb
 
 from mcp.server.fastmcp import FastMCP
 
-from src.udbpy import textutil, ui
+from src.udbpy import engine, event_info, textutil, ui
 from src.udbpy.fileutil import mkstemp
 from src.udbpy.gdb_extensions import (
     command,
@@ -364,6 +364,29 @@ class UdbMcpGateway:
         self.udb.last.execute_command(
             expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
         )
+
+    @report
+    @source_context
+    @collect_output
+    @chain_of_thought
+    def tool_ugo_sender(self) -> None:
+        """
+        Switch to another available recording (if present) at the point that sent data to the
+        program currently running.
+
+        You should use this tool if you believe a bug involves a bad value received from another
+        process.  Confirm why the bad value arrived before reporting a result.
+
+        After using this tool, debugging will resume in the context of the sending process not the
+        one you have been debugging.  You will need to refresh your state.
+
+        Do not use the ugo_end tool afterwards as this will skip past the point of interest.
+        """
+        entry = self.udb.multiproc.find_correlated_entry_for_previous_entry(
+            self.udb.inferiors.selected, True
+        )
+        self.udb.inferiors.goto_inferior_num(entry.inferior.num)
+        self.udb.events.goto_event_time(engine.Time(entry.bbcount, event_info.PC_AFTER_BB))
 
     @report
     @source_context
