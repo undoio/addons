@@ -114,6 +114,21 @@ Use `print` to find out the current value of a variable.  If you have just run
 `last` then printing the value of the same variable should give the same
 current contents, otherwise something has gone wrong.
 
+## Traversing network calls
+
+Sometimes you may encounter a bad value that was received from a networking-related call (for
+instance, `recvmsg`) in the current process.
+
+If you believe the bad value is a result of a bug in the sending process you must attempt to confirm
+your diagnosis.  To do so, use the `ugo_sender` tool to switch to the sending process and continue
+your investigation.
+
+Use this to check your hypothesis.  You must do this before reporting back to the user that there is
+a bug in the sender.
+
+The `ugo_sender` tool is particularly useful to use when the `last-value` tool has stopped in a
+network receive call, indicating that as the source of the data.
+
 ## Understanding `if` statements
 
 If the user is currently in an `if` statement, step back to the condition (the
