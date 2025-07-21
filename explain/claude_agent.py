@@ -6,8 +6,10 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from src.udbpy.fileutil import mkstemp
 
@@ -21,6 +23,27 @@ class ClaudeAgent(BaseAgent):
     """Claude Code agent implementation."""
 
     _session_id: str | None = None
+
+    name: ClassVar[str] = "claude"
+    program_name: ClassVar[str] = "claude"
+    display_name: ClassVar[str] = "Claude Code"
+
+    @classmethod
+    def find_binary(cls) -> Path | None:
+        """
+        Find and return the path to the Claude binary.
+
+        Returns:
+            Path to the Claude binary, or None if not found
+        """
+        claude_local_install_path = Path.home() / ".claude" / "local" / cls.program_name
+
+        if loc := shutil.which(cls.program_name):
+            return Path(loc)
+        elif claude_local_install_path.exists():
+            return claude_local_install_path
+
+        return None
 
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """

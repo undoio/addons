@@ -13,14 +13,11 @@ import asyncio
 import contextlib
 import functools
 import inspect
-import os
 import random
 import re
-import shutil
 import socket
 import textwrap
 from collections.abc import Callable
-from enum import Enum
 from pathlib import Path
 from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
 
@@ -31,10 +28,12 @@ from mcp.server.fastmcp.prompts import Prompt
 from src.udbpy import ui
 from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
 
-from .agents import BaseAgent
-from .amp_agent import AmpAgent
+from .agents import AgentRegistry, BaseAgent
+
+# Agent modules are imported to trigger registration.
+from .amp_agent import AmpAgent  # pylint: disable=unused-import
 from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
-from .claude_agent import ClaudeAgent
+from .claude_agent import ClaudeAgent  # # pylint: disable=unused-import
 from .output_utils import console_whizz, print_divider, print_report_field
 
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
@@ -56,32 +55,7 @@ UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
 event_loop = None
 
 
-class Agent(Enum):
-    CLAUDE = "claude"
-    AMP = "amp"
-
-    def display_name(self) -> str:
-        match self:
-            case self.CLAUDE:
-                return "Claude Code"
-            case self.AMP:
-                return "Amp"
-        assert False  # Unreachable.
-
-    def program_name(self) -> str:
-        return self.value
-
-    @classmethod
-    def values(cls) -> list[str]:
-        return [a.value for a in cls]
-
-
-CLAUDE_LOCAL_INSTALL_PATH = Path.home() / ".claude" / "local" / Agent.CLAUDE.program_name()
-
-agent = None
-"""Agent in use, if explain has been invoked before."""
-
-agent_instance: BaseAgent | None = None
+agent: BaseAgent | None = None
 """Agent instance for the current session."""
 
 
@@ -577,9 +551,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
         run_server(gateway, args.port)
 
 
-async def explain_query(
-    agent_enum: Agent, agent_instance: BaseAgent, gateway: UdbMcpGateway, why: str
-) -> str:
+async def explain_query(agent: BaseAgent, gateway: UdbMcpGateway, why: str) -> str:
     """
     Explain a query from the user using an external agent process + MCP.
     """
@@ -598,10 +570,10 @@ async def explain_query(
 
         console_whizz(f" * {random.choice(THINKING_MSGS)}...")
         print_divider()
-        print_report_field("AI agent", agent_enum.display_name())
+        print_report_field("AI agent", agent.display_name)
         print_divider()
 
-        explanation = await agent_instance.ask(why, port, tools=gateway.tools)
+        explanation = await agent.ask(why, port, tools=gateway.tools)
 
     finally:
         # Shut down the server once we have an explanation.
@@ -616,60 +588,13 @@ async def explain_query(
     return explanation
 
 
-def get_claude_bin() -> Path:
-    claude_bin = None
-    if loc := shutil.which(Agent.CLAUDE.program_name()):
-        claude_bin = Path(loc)
-    elif CLAUDE_LOCAL_INSTALL_PATH.exists():
-        claude_bin = CLAUDE_LOCAL_INSTALL_PATH
-
-    if not claude_bin:
-        print("Please ensure working install of Claude Code is available on your PATH.")
-        raise Exception(f"Could not find `{Agent.CLAUDE.program_name()}`.")
-
-    return claude_bin
-
-
-def get_amp_bin() -> Path:
-    if loc := shutil.which(Agent.AMP.program_name()):
-        return Path(loc)
-    else:
-        print("Please ensure working install of Amp is available on your PATH.")
-        raise Exception("Could not find `{Agent.AMP.program_name()}`.")
-
-
-def select_agent(agent: str) -> Agent:
-    """
-    Automatically select an agent to use if not specified as an argument to "explain".
-    """
-    if agent:
-        return Agent(agent)
-
-    if env_agent := os.environ.get("EXPLAIN_AGENT"):
-        # Prefer the environment variable, if valid.
-        if env_agent not in Agent.values():
-            raise Exception(f"Unknown agent set in environment: {env_agent}")
-        return Agent(env_agent)
-
-    elif shutil.which(Agent.CLAUDE.program_name()) or CLAUDE_LOCAL_INSTALL_PATH.exists():
-        # Choose Claude Code if not otherwise specified.
-        return Agent.CLAUDE
-
-    elif shutil.which(Agent.AMP.program_name()):
-        # Choose Amp when Claude Code is not present.
-        return Agent.AMP
-
-    else:
-        raise Exception("Could not find an installed coding agent.")
-
-
 @command.register(
     gdb.COMMAND_USER,
     arg_parser=command_args.DashArgs(
         command_args.Option(
             long="agent",
             short="a",
-            value=command_args.Choice(Agent.values(), optional=True),
+            value=command_args.Choice(AgentRegistry.available_agents(), optional=True),
         ),
         allow_remainders=True,
     ),
@@ -679,23 +604,16 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
     Use AI to answer questions about the code.
     """
     why = args.untokenized_remainders or ""
-    global agent, agent_instance
+    global agent
     if agent:
         # The agent cannot be switched within a session.
-        if args.agent and args.agent != agent:
-            raise Exception(f"Cannot switch agents within session - current agent is {agent}.")
+        if args.agent and args.agent != agent.name:
+            raise Exception(
+                f"Cannot switch agents within session - current agent is {agent.name!r}."
+            )
     else:
         # If no agent was previously selected, choose one now.
-        agent = select_agent(args.agent)
-
-        # Create agent instance
-        match agent:
-            case Agent.CLAUDE:
-                agent_bin = get_claude_bin()
-                agent_instance = ClaudeAgent(agent_bin, log_level=LOG_LEVEL)
-            case Agent.AMP:
-                agent_bin = get_amp_bin()
-                agent_instance = AmpAgent(agent_bin, log_level=LOG_LEVEL)
+        agent = AgentRegistry.select_agent(args.agent, log_level=LOG_LEVEL)
 
     if not why:
         print("Enter your question (type ^D on a new line to exit):")
@@ -716,9 +634,7 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
     ):
-        explanation = event_loop.run_until_complete(
-            explain_query(agent, agent_instance, gateway, why)
-        )
+        explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
     console_whizz(" * Explanation:")
     print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
