@@ -6,9 +6,11 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 import textwrap
-from dataclasses import ClassVar, dataclass
+from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from src.udbpy.fileutil import mkstemp
 
@@ -23,6 +25,23 @@ class AmpAgent(BaseAgent):
 
     _thread_id: str | None = None
     _thread_answers: int = 0
+
+    name: ClassVar[str] = "amp"
+    program_name: ClassVar[str] = "amp"
+    display_name: ClassVar[str] = "Amp"
+
+    @classmethod
+    def find_binary(cls) -> Path | None:
+        """
+        Find and return the path to the Amp binary.
+
+        Returns:
+            Path to the Amp binary, or None if not found
+        """
+        if loc := shutil.which(cls.program_name):
+            return Path(loc)
+        else:
+            return None
 
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """
