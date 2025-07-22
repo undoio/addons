@@ -34,6 +34,7 @@ from src.udbpy.fileutil import mkstemp
 from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
 
 from .output_utils import console_whizz, print_assistant_message, print_divider, print_report_field
+from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
 
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
 uvicorn.server.HANDLED_SIGNALS = ()
@@ -42,18 +43,6 @@ uvicorn.server.HANDLED_SIGNALS = ()
 LOG_LEVEL = "CRITICAL"
 # LOG_LEVEL="DEBUG"
 
-
-EXTENSION_PATH = Path(__file__).parent
-"""Directory containing this extension module."""
-
-MCP_INSTRUCTIONS = (EXTENSION_PATH / "instructions.md").read_text(encoding="UTF-8")
-"""Top-level instructions for the MCP server."""
-
-SYSTEM_PROMPT = (EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8")
-"""System prompt to supply to Claude on every invocation."""
-
-THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")[:-1]
-"""Messages to display whilst the system is thinking."""
 
 P = ParamSpec("P")
 T = TypeVar("T")
