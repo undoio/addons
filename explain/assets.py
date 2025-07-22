@@ -15,3 +15,6 @@ SYSTEM_PROMPT = (_EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8
 
 THINKING_MSGS = (_EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")[:-1]
 """Messages to display whilst the system is thinking."""
+
+AMP_PROMPT = (_EXTENSION_PATH / "amp_prompt.md").read_text(encoding="UTF-8")
+"""Amp-specific prompt for framing responses and encouraging thorough investigation."""

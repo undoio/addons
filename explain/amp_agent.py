@@ -7,7 +7,6 @@ import contextlib
 import json
 import os
 import shutil
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -15,7 +14,7 @@ from typing import ClassVar
 from src.udbpy.fileutil import mkstemp
 
 from .agents import BaseAgent
-from .assets import SYSTEM_PROMPT
+from .assets import AMP_PROMPT, SYSTEM_PROMPT
 from .output_utils import print_assistant_message
 
 
@@ -148,25 +147,9 @@ class AmpAgent(BaseAgent):
             )
             assert amp.stdin and amp.stdout and amp.stderr
 
-            # Amp doesn't provide framing for intermediate messages, so we must prompt it to provide
-            # some. It also needs a bit of extra encouragement, on top of its default prompts, to
-            # fully verify its debugging conclusions. The Oracle tool consults a reasoning model and
-            # instructing it to use this provides a more persistent debugging approach.
-            amp_prompt = textwrap.dedent("""\
-                Enclose your answer to the user's question in <answer> </answer> tags.
-                Enclose your intermediate statements before the answer in <thinking> </thinking> tags.
-                These tags must be on their own line.
-
-                You must provide evidence from the MCP server for the claims in your answer. Explore the
-                program history fully to ensure you have this.
-
-                Think hard about what information you have retrieved and how it is supported by results
-                from the MCP server.  Use the Oracle tool to confirm.
-            """)
-
             # If Amp hasn't answered any questions yet we prepend a prompt to the question.
             if not self._thread_answers:
-                prompt = "\n".join([amp_prompt, SYSTEM_PROMPT, question])
+                prompt = "\n".join([AMP_PROMPT, SYSTEM_PROMPT, question])
             else:
                 prompt = question
 
