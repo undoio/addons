@@ -23,6 +23,7 @@ import textwrap
 import time
 
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
 
@@ -66,8 +67,6 @@ SYSTEM_PROMPT = (EXTENSION_PATH / "system_prompt.md").read_text(encoding="UTF-8"
 THINKING_MSGS = (EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").split("\n")[:-1]
 """Messages to display whilst the system is thinking."""
 
-CLAUDE_LOCAL_INSTALL_PATH = Path.home() / ".claude" / "local" / "claude"
-
 P = ParamSpec("P")
 T = TypeVar("T")
 UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
@@ -78,8 +77,40 @@ UdbMcpGatewayAlias: TypeAlias = "UdbMcpGateway"
 # invocation.
 event_loop = None
 
+
+class Agent(Enum):
+    CLAUDE = "claude"
+    AMP = "amp"
+
+    def display_name(self) -> str:
+        match self:
+            case self.CLAUDE:
+                return "Claude Code"
+            case self.AMP:
+                return "Amp"
+        assert False  # Unreachable.
+
+    def program_name(self) -> str:
+        return self.value
+
+    @classmethod
+    def values(cls) -> list[str]:
+        return [a.value for a in cls]
+
+
+CLAUDE_LOCAL_INSTALL_PATH = Path.home() / ".claude" / "local" / Agent.CLAUDE.program_name()
+
+agent = None
+"""Agent in use, if explain has been invoked before."""
+
 claude_session = None
 """Claude session, if an interaction has already begun."""
+
+amp_thread = None
+"""Amp thread, if an interaction has already begun."""
+
+amp_thread_answers = 0
+"""Number of answers to explain invocations."""
 
 
 def console_whizz(msg: str, end: str = "\n") -> None:
@@ -627,7 +658,163 @@ def print_assistant_message(text: str):
     print_divider()
 
 
-async def handle_claude_messages(stdout) -> str:
+async def handle_amp_messages(stdout: asyncio.StreamReader) -> str:
+    """
+    Handle streamed messages from Amp until a final result, which is returned.
+
+    Amp doesn't natively provide framing from its messages but we prompt to request a particular
+    format, which this function handles.
+    """
+    result = ""
+    msg: list[str] = []
+    thinking = False
+    answering = False
+    async for line_bytes in stdout:
+        line = line_bytes.decode("utf-8").rstrip()
+
+        if LOG_LEVEL == "DEBUG":
+            print("Line:", line)
+
+        match line:
+            case "<thinking>":
+                assert not thinking and not answering
+                thinking = True
+
+            case "</thinking>":
+                assert thinking and not answering
+                thinking = False
+                print_assistant_message("\n".join(msg))
+                msg = []
+
+            case "<answer>":
+                assert not thinking and not answering
+                answering = True
+
+            case "</answer>":
+                assert answering and not thinking
+                answering = False
+                result = "\n".join(msg)
+
+            case _ if thinking or answering:
+                msg.append(line)
+
+    assert not thinking and not answering
+
+    return result
+
+
+async def discard_amp_answers(stdout: asyncio.StreamReader, count: int) -> None:
+    """
+    Discard previously-received answers on an Amp thread.
+
+    When the Amp client resumes a thread it re-displays previous messages. We skip the number of
+    previously-received answers here so that we can just display any new messages from the latest
+    invocation.
+    """
+    while count and (line_bytes := await stdout.readline()):
+        if line_bytes.decode("utf-8").rstrip() == "</answer>":
+            count -= 1
+
+
+async def ask_amp(amp_bin: Path, why: str, port: int, tools: list[str]) -> str:
+    """
+    Pose a question to an external `amp` program, supplying access to a UDB MCP server.
+    """
+    if LOG_LEVEL == "DEBUG":
+        print(f"Connecting Amp to MCP server on port {port}")
+
+    # Craft an Amp config (n.b. this replaces the existing use config, it would probably be better
+    # and safer to copy and adjust it).
+    amp_config = {
+        "amp.mcpServers": {"UDB_Server": {"type": "sse", "url": f"http://localhost:{port}/sse"}}
+    }
+    amp_config_fd, amp_config_path = mkstemp(prefix="amp_config", suffix=".json")
+    with contextlib.closing(os.fdopen(amp_config_fd, "w")) as amp_config_file:
+        json.dump(amp_config, amp_config_file)
+
+    global amp_thread
+    if not amp_thread:
+        # Start a new thread if one doesn't already exist for this debug session.
+        amp_start_thread = await asyncio.create_subprocess_exec(
+            str(amp_bin),
+            "threads",
+            "new",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        assert amp_start_thread.stdout and amp_start_thread.stderr
+
+        stdout_bytes, stderr_bytes = await amp_start_thread.communicate()
+        assert not stderr_bytes
+
+        amp_thread = stdout_bytes.decode("utf-8").rstrip()
+
+    result = ""
+
+    try:
+        amp = await asyncio.create_subprocess_exec(
+            str(amp_bin),
+            "--settings-file",
+            amp_config_path,
+            "threads",
+            "continue",
+            amp_thread,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        assert amp.stdin and amp.stdout and amp.stderr
+
+        # Amp doesn't provide framing for intermediate messages, so we must prompt it to provide
+        # some. It also needs a bit of extra encouragement, on top of its default prompts, to fully
+        # verify its debugging conclusions. The Oracle tool consults a reasoning model and
+        # instructing it to use this provides a more persistent debugging approach.
+        amp_prompt = textwrap.dedent("""\
+            Enclose your answer to the user's question in <answer> </answer> tags.
+            Enclose your intermediate statements before the answer in <thinking> </thinking> tags.
+            These tags must be on their own line.
+
+            You must provide evidence from the MCP server for the claims in your answer. Explore the
+            program history fully to ensure you have this.
+
+            Think hard about what information you have retrieved and how it is supported by results
+            from the MCP server.  Use the Oracle tool to confirm.
+        """)
+
+        # If Amp hasn't answered any questions yet we prepend a prompt to the question.
+        global amp_thread_answers
+        if not amp_thread_answers:
+            prompt = "\n".join([amp_prompt, SYSTEM_PROMPT, why])
+        else:
+            prompt = why
+
+        amp.stdin.write(prompt.encode("utf-8"))
+        await amp.stdin.drain()
+        amp.stdin.close()
+
+        # Throw away previous answers on this thread.
+        await discard_amp_answers(amp.stdout, amp_thread_answers)
+
+        # Get the latest answer.
+        result = await handle_amp_messages(amp.stdout)
+        if result:
+            # Record that we've got another answer to strip.
+            amp_thread_answers += 1
+
+        stderr_bytes = await amp.stderr.read()
+
+    finally:
+        if amp.returncode is None:
+            amp.terminate()
+            await amp.wait()
+
+        if amp.returncode and stderr_bytes:
+            print("Errors:\n", stderr_bytes.decode("utf-8"))
+
+    return result
+
+
+async def handle_claude_messages(stdout: asyncio.StreamReader) -> str:
     """
     Handle streamed JSON messages from Claude until a final result, which is returned.
     """
@@ -685,9 +872,6 @@ async def ask_claude(claude_bin: Path, why: str, port: int, tools: list[str]) ->
     """
     if LOG_LEVEL == "debug":
         print(f"Connecting Claude to MCP server on port {port}")
-    else:
-        console_whizz(f" * {random.choice(THINKING_MSGS)}...")
-        print_divider()
 
     mcp_config = {
         "mcpServers": {"UDB_Server": {"type": "sse", "url": f"http://localhost:{port}/sse"}}
@@ -736,7 +920,7 @@ async def ask_claude(claude_bin: Path, why: str, port: int, tools: list[str]) ->
     return result
 
 
-async def explain_query(claude_bin: Path, gateway: UdbMcpGateway, why: str) -> str:
+async def explain_query(agent: Agent, agent_bin: Path, gateway: UdbMcpGateway, why: str) -> str:
     """
     Explain a query from the user using an external `claude` process + MCP.
     """
@@ -753,8 +937,19 @@ async def explain_query(claude_bin: Path, gateway: UdbMcpGateway, why: str) -> s
         server = uvicorn.Server(config)
         mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
 
-        # Ask Claude the question.
-        explanation = await ask_claude(claude_bin, why, port, tools=gateway.tools)
+        console_whizz(f" * {random.choice(THINKING_MSGS)}...")
+        print_divider()
+        print_report_field("AI agent", agent.display_name())
+        print_divider()
+
+        match agent:
+            case Agent.CLAUDE:
+                # Ask Claude the question.
+                explanation = await ask_claude(agent_bin, why, port, tools=gateway.tools)
+            case Agent.AMP:
+                explanation = await ask_amp(agent_bin, why, port, tools=gateway.tools)
+            case _:
+                raise Exception(f"Unknown agent: {agent}")
 
     finally:
         # Shut down the server once we have an explanation.
@@ -769,21 +964,84 @@ async def explain_query(claude_bin: Path, gateway: UdbMcpGateway, why: str) -> s
     return explanation
 
 
-@command.register(gdb.COMMAND_USER, arg_parser=command_args.Untokenized())
-def explain(udb: udb_base.Udb, why: str) -> None:
-    """
-    Use AI to answer questions about the code.
-    """
+def get_claude_bin() -> Path:
     claude_bin = None
-    if loc := shutil.which("claude"):
+    if loc := shutil.which(Agent.CLAUDE.program_name()):
         claude_bin = Path(loc)
     elif CLAUDE_LOCAL_INSTALL_PATH.exists():
         claude_bin = CLAUDE_LOCAL_INSTALL_PATH
 
     if not claude_bin:
-        print("Could not find `claude`.")
         print("Please ensure working install of Claude Code is available on your PATH.")
-        return
+        raise Exception(f"Could not find `{Agent.CLAUDE.program_name()}`.")
+
+    return claude_bin
+
+
+def get_amp_bin() -> Path:
+    if loc := shutil.which(Agent.AMP.program_name()):
+        return Path(loc)
+    else:
+        print("Please ensure working install of Amp is available on your PATH.")
+        raise Exception("Could not find `{Agent.AMP.program_name()}`.")
+
+
+def select_agent(agent: str) -> Agent:
+    """
+    Automatically select an agent to use if not specified as an argument to "explain".
+    """
+    if agent:
+        return Agent(agent)
+
+    if env_agent := os.environ.get("EXPLAIN_AGENT"):
+        # Prefer the environment variable, if valid.
+        if env_agent not in Agent.values():
+            raise Exception(f"Unknown agent set in environment: {env_agent}")
+        return Agent(env_agent)
+
+    elif shutil.which(Agent.CLAUDE.program_name()) or CLAUDE_LOCAL_INSTALL_PATH.exists():
+        # Choose Claude Code if not otherwise specified.
+        return Agent.CLAUDE
+
+    elif shutil.which(Agent.AMP.program_name()):
+        # Choose Amp when Claude Code is not present.
+        return Agent.AMP
+
+    else:
+        raise Exception("Could not find an installed coding agent.")
+
+
+@command.register(
+    gdb.COMMAND_USER,
+    arg_parser=command_args.DashArgs(
+        command_args.Option(
+            long="agent",
+            short="a",
+            value=command_args.Choice(Agent.values(), optional=True),
+        ),
+        allow_remainders=True,
+    ),
+)
+def explain(udb: udb_base.Udb, args: Any) -> None:
+    """
+    Use AI to answer questions about the code.
+    """
+    why = args.untokenized_remainders or ""
+    global agent
+    if agent:
+        # The agent cannot be switched within a session.
+        if args.agent and args.agent != agent:
+            raise Exception(f"Cannot switch agents within session - current agent is {agent}.")
+    else:
+        # If no agent was previously selected, choose one now.
+        agent = select_agent(args.agent)
+
+    # Look up binary path.
+    match agent:
+        case Agent.CLAUDE:
+            agent_bin = get_claude_bin()
+        case Agent.AMP:
+            agent_bin = get_amp_bin()
 
     if not why:
         print("Enter your question (type ^D on a new line to exit):")
@@ -804,7 +1062,7 @@ def explain(udb: udb_base.Udb, why: str) -> None:
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
     ):
-        explanation = event_loop.run_until_complete(explain_query(claude_bin, gateway, why))
+        explanation = event_loop.run_until_complete(explain_query(agent, agent_bin, gateway, why))
 
     console_whizz(" * Explanation:")
     print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
