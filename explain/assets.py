@@ -18,3 +18,6 @@ THINKING_MSGS = (_EXTENSION_PATH / "thinking.txt").read_text(encoding="UTF-8").s
 
 AMP_PROMPT = (_EXTENSION_PATH / "amp_prompt.md").read_text(encoding="UTF-8")
 """Amp-specific prompt for framing responses and encouraging thorough investigation."""
+
+CODEX_PROMPT = (_EXTENSION_PATH / "codex_prompt.md").read_text(encoding="UTF-8")
+"""Codex-specific prompt to encourage thorough investigation."""
