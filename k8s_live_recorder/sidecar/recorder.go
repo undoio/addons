@@ -147,6 +147,20 @@ func (rc *RecorderController) startRecording(ctx context.Context) error {
 
 	log.Printf("Found current PID %d for process %s", currentPID, rc.config.AppProcessName)
 
+	if err := copyTargetExecutable(currentPID); err != nil {
+		if statusErr := rc.clearAnnotation(ctx, statusAnnotation); statusErr != nil {
+			log.Printf("Warning: Failed to clear status after executable copy failure: %v", statusErr)
+		}
+		return wrapErr("copying target executable", err)
+	}
+
+	if err := copySharedLibraries(currentPID); err != nil {
+		if statusErr := rc.clearAnnotation(ctx, statusAnnotation); statusErr != nil {
+			log.Printf("Warning: Failed to clear status after shared library copy failure: %v", statusErr)
+		}
+		return wrapErr("copying shared libraries", err)
+	}
+
 	timestamp := time.Now().Format("20060102-150405")
 	recordingFile := filepath.Join(
 		recordingsDir,

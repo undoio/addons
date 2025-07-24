@@ -49,8 +49,9 @@ This very simple demo will show you how to record an application that crashes, g
   kubectl logs $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') -c broken-go-app
 ```
 1. Start recording `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=start --overwrite || true`
-1. Make the target application crash `curl -s "$(minikube service broken-go-app-service --url)/crash"`
-1. Stop recording `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=stop --overwrite || true` - NOTE: due to livenessProbe restarting the broken-go-app container
+1. Get service url `minikube service broken-go-app-service --url` - NOTE: if using docker driver, you will need to perform the curl request in a new terminal while this command continues to run.
+1. Make the target application crash `curl -s "<service-url>/crash"`
+1. Stop recording `kubectl annotate pod $(kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}') undo.io/live-record=stop --overwrite || true` - NOTE: recording will stop due to the crash
 
 1. List uploaded recordings `aws s3 ls s3://S3-BUCKET-NAME/recordings/`
 1. Copy recording to local machine `aws s3 cp s3://S3-BUCKET-NAME/recordings/RECORDING-FILE-NAME.undo .`
