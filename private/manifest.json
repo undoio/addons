@@ -106,7 +106,8 @@
 	    "script": "explain/explain.py",
 	    "python_package_deps": [
 		"mcp[cli]==1.9.4",
-		"exceptiongroup"
+		"exceptiongroup",
+		"mcp-proxy"
 	    ],
 	    "python_package_dir": "explain_packages",
 	    "version_min": "8.2.0"

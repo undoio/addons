@@ -34,6 +34,7 @@ from .agents import AgentRegistry, BaseAgent
 from .amp_agent import AmpAgent  # pylint: disable=unused-import
 from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
 from .claude_agent import ClaudeAgent  # # pylint: disable=unused-import
+from .codex_agent import CodexAgent  # pylint: disable=unused-import
 from .output_utils import console_whizz, print_divider, print_report_field
 
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
