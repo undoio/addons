@@ -4,14 +4,37 @@ Output utilities for the explain module.
 
 from __future__ import annotations
 
-import textwrap
+import contextlib
+import sys
 import time
-from dataclasses import dataclass
+import unittest.mock
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.udbpy import textutil
+from rich.console import Console
+from rich.file_proxy import FileProxy
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.markup import escape
+from rich.padding import Padding
+from rich.panel import Panel
+from rich.table import Table
 from src.udbpy.termstyles import Color, Intensity, ansi_format
+
+console = Console(force_terminal=True)
+
+
+class ExplainPanel(Panel):
+    """
+    Convenience class for displaying a panel with nice default behaviour.
+    """
+
+    def __init__(self, renderable, *args, title: str | None = None, **kwargs) -> None:
+        if title := kwargs.get("title"):
+            kwargs["title"] = f"[bold green]{title}"
+            kwargs["title_align"] = "left"
+        super().__init__(Padding(renderable, (0, 3)), *args, **kwargs)
 
 
 @dataclass
@@ -20,41 +43,72 @@ class ToolCall:
     A context manager representing an individual call to a debugger tool.
 
     Enter the context manager before the tool call itself is used. This class will report the call
-    on the console, add results to it when provided, then display a section divider after the
-    context has been exited.
+    on the console, add results to it when provided and complete the record on the console when the
+    context is exited.
     """
 
     tool: str
     hypothesis: str
     args: dict[str, Any]
+    result: str | None = field(init=False, default=None)
+    exit_stack: contextlib.ExitStack | None = field(init=False, default=None)
 
     def __enter__(self) -> ToolCall:
-        self._generate()
+        # Don't allow a ToolCall context to be reused.
+        assert self.exit_stack is None
+        self.exit_stack = contextlib.ExitStack()
+
+        live = Live(self._generate(), auto_refresh=False, console=console)
+        self.exit_stack.enter_context(live)
+        live.refresh()
+        self.exit_stack.callback(lambda: live.update(self._generate(), refresh=True))
+
+        # Now revert the Live class's changes to sys.stdout for the duration of
+        # the tool call this context wraps. This is required for us to reliably
+        # capture tool output and we will not perform any user output in the
+        # interim.
+        assert isinstance(sys.stdout, FileProxy)
+        self.exit_stack.enter_context(
+            # Pylint doesn't understand sys.stdout being a FileProxy.
+            # pylint: disable=no-member
+            unittest.mock.patch("sys.stdout", sys.stdout.rich_proxied_file)
+        )
+
         return self
 
-    def __exit__(self, *args) -> None:
-        print_divider()
+    def __exit__(self, *args: Any) -> None:
+        assert self.exit_stack is not None
+        self.exit_stack.close()
 
-    def _generate(self) -> None:
-        print_report_field("Tool", self.tool)
+    def _generate(self) -> ExplainPanel:
+        box = Table.grid()
+        box.add_column("Items")
+
+        table = Table.grid()
+        table.add_column("Field", width=15, style="bold white")
+        table.add_column("Value")
+
+        table.add_row("Operation:", self.tool)
         args_fmt = ", ".join(f"{k}={v}" for k, v in self.args.items())
         if args_fmt:
-            print_report_field("Arguments", args_fmt)
-        print_report_field("Thoughts", self.hypothesis)
+            table.add_row("Arguments:", args_fmt)
+        table.add_row("Thoughts:", self.hypothesis)
 
-    def report_result(self, results: str) -> None:
-        """
-        Report a tool call result from within the context manager.
-        """
-        if results is None:
-            results = ""
+        box.add_row(table)
 
-        if len(results.splitlines()) == 1:
-            result_text = results
+        if self.result is None:
+            box.add_row(Padding("[blue italic]Processing...", (1, 0)))
         else:
-            result_text = "\n" + textwrap.indent(results, "   $  ", predicate=lambda _: True)
+            if len(self.result.splitlines()) == 1 and len(self.result) < console.size[0]:
+                table.add_row("Result:", escape(self.result))
+            elif self.result:
+                box.add_row("[bold white]Result:")
+                box.add_row(Padding(escape(self.result), (0, 3)))
 
-        print_report_field("Result", result_text)
+        return ExplainPanel(box, title="Debugger call")
+
+    def report_result(self, result: str) -> None:
+        self.result = result
 
 
 def console_whizz(msg: str, end: str = "\n") -> None:
@@ -75,25 +129,12 @@ def print_agent(display_name: str, agent_bin: Path) -> None:
     """
     Print agent details at startup.
     """
-    print_divider()
-    print_report_field("AI Agent", display_name)
-    print_report_field("Agent Path", str(agent_bin))
-    print_divider()
-
-
-def print_report_field(label: str, msg: str) -> None:
-    """
-    Formatted field label for reporting command results.
-    """
-    label_fmt = ansi_format(f"{label + ':':10s}", foreground=Color.WHITE, intensity=Intensity.BOLD)
-    print(f" | {label_fmt} {msg}")
-
-
-def print_divider() -> None:
-    """
-    Display a divider between output elements.
-    """
-    print(" |---")
+    table = Table.grid()
+    table.add_column("Field", width=15, style="bold white")
+    table.add_column("Value")
+    table.add_row("AI Agent:", display_name)
+    table.add_row("Agent Path:", str(agent_bin))
+    console.print(ExplainPanel(table))
 
 
 def print_tool_call(tool: str, hypothesis: str, args: dict[str, Any]) -> ToolCall:
@@ -109,26 +150,15 @@ def print_assistant_message(text: str) -> None:
     """
     Display a formatted message from the code assistant.
     """
-    field = "Assistant"
-    # Effective width = terminal width - length of formatted field - additional chars
-    single_line_width = textutil.TERMINAL_WIDTH - 14
-    if len(text.splitlines()) > 1 or len(text) >= single_line_width:
-        prefix = "   >  "
-        # If we wrap, we'll start a new line and the width available is different.
-        wrapping_width = textutil.TERMINAL_WIDTH - len(prefix)
-        text = "\n".join(
-            textwrap.wrap(
-                text,
-                width=wrapping_width,
-                drop_whitespace=False,
-                replace_whitespace=False,
-            )
-        )
-        text = "\n" + textwrap.indent(text, prefix=prefix, predicate=lambda _: True)
-    print_report_field(field, text)
-    print_divider()
+    # Truncate to 8 lines maximum of assistant output.
+    lines = text.splitlines()
+    if len(lines) > 8:
+        lines = lines[:8] + ["", "[...]"]
+    text = "\n".join(lines)
+
+    console.print(ExplainPanel(Markdown(text), title="Assistant"))
 
 
 def print_explanation(text: str) -> None:
     console_whizz(" * Explanation:")
-    print(textwrap.indent(text, "   =  ", predicate=lambda _: True))
+    console.print(Padding(Markdown(text), (1, 3)))
