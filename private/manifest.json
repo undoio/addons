@@ -107,7 +107,8 @@
 	    "python_package_deps": [
 		"mcp[cli]==1.9.4",
 		"exceptiongroup",
-		"mcp-proxy"
+		"mcp-proxy",
+		"rich"
 	    ],
 	    "python_package_dir": "explain_packages",
 	    "version_min": "8.2.0"
