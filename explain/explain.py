@@ -383,7 +383,10 @@ class UdbMcpGateway:
         #  * Use "reverse-step" to get back into the end of the function.
 
         # Step to next line.
-        self.udb.execution.next()
+        with gdbio.CollectOutput() as collector:
+            self.udb.execution.next()
+        if LOG_LEVEL == "DEBUG":
+            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
 
         # Now try to step back into the correct function.
         with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
