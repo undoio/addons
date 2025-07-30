@@ -17,6 +17,7 @@ import random
 import re
 import socket
 import textwrap
+import unittest.mock
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
@@ -548,6 +549,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("pagination", False),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         run_server(gateway, args.port)
 
@@ -634,6 +636,7 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("pagination", False),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
