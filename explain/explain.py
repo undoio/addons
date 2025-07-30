@@ -439,7 +439,15 @@ class UdbMcpGateway:
         Params:
         expression -- the expression to be evaluated.
         """
-        return str(gdb.parse_and_eval(expression))
+        # pylint: disable=protected-access
+        orig_volatile_mode_explained = self.udb._volatile_mode_explained
+        result = ""
+        try:
+            self.udb._volatile_mode_explained = True
+            result = str(gdb.parse_and_eval(expression))
+        finally:
+            self.udb._volatile_mode_explained = orig_volatile_mode_explained
+        return result
 
     @report
     @chain_of_thought
