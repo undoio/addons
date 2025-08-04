@@ -31,7 +31,7 @@ class ExplainPanel(Panel):
     """
 
     def __init__(self, renderable, *args, title: str | None = None, **kwargs) -> None:
-        if title := kwargs.get("title"):
+        if title:
             kwargs["title"] = f"[bold green]{title}"
             kwargs["title_align"] = "left"
         super().__init__(Padding(renderable, (0, 3)), *args, **kwargs)
