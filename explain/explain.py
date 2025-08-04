@@ -16,7 +16,7 @@ import inspect
 import random
 import re
 import socket
-import textwrap
+import unittest.mock
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
@@ -34,7 +34,7 @@ from .amp_agent import AmpAgent  # pylint: disable=unused-import
 from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
 from .claude_agent import ClaudeAgent  # # pylint: disable=unused-import
 from .codex_agent import CodexAgent  # pylint: disable=unused-import
-from .output_utils import console_whizz, print_divider, print_report_field
+from .output_utils import console_whizz, print_agent, print_explanation, print_tool_call
 
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
 uvicorn.server.HANDLED_SIGNALS = ()
@@ -66,34 +66,24 @@ def report(fn: Callable[P, str | None]) -> Callable[P, str]:
 
     @functools.wraps(fn)
     def wrapped(*args: Any, **kwargs: Any):
-        formatted_name = fn.__name__.removeprefix("tool_").replace("_", "-")
-        print_report_field("Operation", f"{formatted_name:15s}")
+        tool_name = fn.__name__.removeprefix("tool_").replace("_", "-")
 
         sig = inspect.signature(fn)
         binding = sig.bind(*args, **kwargs)
         hypothesis = binding.arguments.pop("hypothesis")  # We'll report this one separately.
-        arguments = ", ".join(f"{k}={v}" for k, v in binding.arguments.items() if k != "self")
-        if arguments:
-            print_report_field("Arguments", arguments)
-        print_report_field("Thoughts", hypothesis)
+        binding.arguments.pop("self")
+        with print_tool_call(tool_name, hypothesis, binding.arguments) as tool_call:
+            try:
+                results = fn(*args, **kwargs)
+            except Exception as e:
+                results = str(e)
+                raise e
+            finally:
+                if results is None:
+                    results = ""
 
-        # Present result in a compact form if it's a single line, otherwise use multiple lines.
-        try:
-            results = fn(*args, **kwargs)
-        except Exception as e:
-            results = str(e)
-            raise e
-        finally:
-            if results is None:
-                results = ""
+                tool_call.report_result(results.rstrip())
 
-            if len(results.splitlines()) == 1:
-                result_text = results
-            else:
-                result_text = "\n" + textwrap.indent(results, "   $  ", predicate=lambda _: True)
-
-            print_report_field("Result", result_text)
-            print_divider()
         return results
 
     return wrapped
@@ -404,7 +394,10 @@ class UdbMcpGateway:
         #  * Use "reverse-step" to get back into the end of the function.
 
         # Step to next line.
-        self.udb.execution.next()
+        with gdbio.CollectOutput() as collector:
+            self.udb.execution.next()
+        if LOG_LEVEL == "DEBUG":
+            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
 
         # Now try to step back into the correct function.
         with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
@@ -570,6 +563,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("pagination", False),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         run_server(gateway, args.port)
 
@@ -592,9 +586,7 @@ async def explain_query(agent: BaseAgent, gateway: UdbMcpGateway, why: str) -> s
         mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
 
         console_whizz(f" * {random.choice(THINKING_MSGS)}...")
-        print_divider()
-        print_report_field("AI agent", agent.display_name)
-        print_divider()
+        print_agent(agent.display_name, agent.agent_bin)
 
         explanation = await agent.ask(why, port, tools=gateway.tools)
 
@@ -656,8 +648,8 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("pagination", False),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
-    console_whizz(" * Explanation:")
-    print(textwrap.indent(explanation, "   =  ", predicate=lambda _: True))
+        print_explanation(explanation)
