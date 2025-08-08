@@ -126,7 +126,7 @@ class AmpAgent(BaseAgent):
             assert amp_start_thread.stdout and amp_start_thread.stderr
 
             stdout_bytes, stderr_bytes = await amp_start_thread.communicate()
-            assert not stderr_bytes
+            assert not stderr_bytes, stderr_bytes
 
             self._thread_id = stdout_bytes.decode("utf-8").rstrip()
 
