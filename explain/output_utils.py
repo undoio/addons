@@ -125,7 +125,7 @@ def console_whizz(msg: str, end: str = "\n") -> None:
     print(end=end)
 
 
-def print_agent(display_name: str, agent_bin: Path) -> None:
+def print_agent(display_name: str, agent_bin: Path, style: str | None) -> None:
     """
     Print agent details at startup.
     """
@@ -134,6 +134,8 @@ def print_agent(display_name: str, agent_bin: Path) -> None:
     table.add_column("Value")
     table.add_row("AI Agent:", display_name)
     table.add_row("Agent Path:", str(agent_bin))
+    if style:
+        table.add_row("Style:", style)
     console.print(ExplainPanel(table))
 
 
