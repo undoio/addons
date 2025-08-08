@@ -29,6 +29,7 @@ from src.udbpy import engine, event_info, ui
 from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
 
 # Agent modules are imported to trigger registration.
+from . import styles
 from .agents import AgentRegistry, BaseAgent
 from .amp_agent import AmpAgent  # pylint: disable=unused-import
 from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
@@ -585,9 +586,6 @@ async def explain_query(agent: BaseAgent, gateway: UdbMcpGateway, why: str) -> s
         server = uvicorn.Server(config)
         mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
 
-        console_whizz(f" * {random.choice(THINKING_MSGS)}...")
-        print_agent(agent.display_name, agent.agent_bin)
-
         explanation = await agent.ask(why, port, tools=gateway.tools)
 
     finally:
@@ -610,6 +608,11 @@ async def explain_query(agent: BaseAgent, gateway: UdbMcpGateway, why: str) -> s
             long="agent",
             short="a",
             value=command_args.Choice(AgentRegistry.available_agents(), optional=True),
+        ),
+        command_args.Option(
+            long="style",
+            short="s",
+            value=command_args.Choice(styles.names(), optional=True),
         ),
         allow_remainders=True,
     ),
@@ -637,6 +640,12 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
                 why += ui.get_user_input(prompt="> ") + "\n"
         print()
 
+    explain_style_description = ""
+    if args.style:
+        explain_style = styles.get(args.style)
+        why += f"\nExplain in the style of {explain_style.prompt}"
+        explain_style_description = explain_style.description
+
     gateway = UdbMcpGateway(udb)
 
     global event_loop
@@ -650,6 +659,9 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.breakpoints_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
+        console_whizz(f" * {random.choice(THINKING_MSGS)}...")
+        print_agent(agent.display_name, agent.agent_bin, explain_style_description)
+
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
         print_explanation(explanation)
