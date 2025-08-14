@@ -573,6 +573,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
     gateway = UdbMcpGateway(udb)
     with (
         gdbutils.temporary_parameter("pagination", False),
+        gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
@@ -658,6 +659,7 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
     with (
         gdbutils.temporary_parameter("pagination", False),
+        gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
