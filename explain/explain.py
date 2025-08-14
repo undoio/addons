@@ -173,13 +173,16 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
     """
 
     @functools.wraps(fn)
-    def wrapped(*args: Any, **kwargs: Any):
-        out = fn(*args, **kwargs)
+    def wrapped(self, *args: Any, **kwargs: Any):
+        out = fn(self, *args, **kwargs)
 
         frame = gdb.selected_frame()
         sal = frame.find_sal()
 
         context = f"\nFunction: {frame.name()}\n"
+
+        if bookmarks := self.udb.bookmarks.get_at_time(self.udb.time.get()):
+            context += f"\nAt bookmarks: {', '.join(bookmarks)}\n"
 
         source = None
         if sal and sal.symtab:
@@ -467,6 +470,8 @@ class UdbMcpGateway:
         Params:
         name - a descriptive name for the current point of interest.
         """
+        if clashes := self.udb.bookmarks.get_at_time(self.udb.time.get()):
+            raise Exception(f"This time is already bookmarked: {', '.join(clashes)}")
         self.udb.bookmarks.add(name)
 
     @report
