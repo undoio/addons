@@ -480,9 +480,16 @@ class UdbMcpGateway:
         """
         Returns the names of previously-stored bookmarks.
 
-        Use this to query interesting points in time that are already identified.
+        Use this to query interesting points in time that are already identified. These are
+        returned in time order, with earlier results earlier in recorded history.
+
+        A special "# Current time" value denotes the current point in program history.
         """
-        return "\n".join(self.udb.bookmarks.iter_bookmark_names())
+        bookmarks = list(self.udb.bookmarks.iter_bookmarks())
+        bookmarks.append(("# Current time", self.udb.time.get()))
+
+        # Sort by engine.Time value.
+        return "\n".join((name for name, _ in sorted(bookmarks, key=lambda b: b[1])))
 
     @report
     @source_context
