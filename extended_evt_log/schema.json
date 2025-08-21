@@ -1,0 +1,72 @@
+{
+  "title": "Extended event log",
+  "description": "easier comparison of recordings",
+  "streams": {
+    "name": "string",
+    "fd": {
+      "open": {
+      	"result": "integer",
+      	"bbcount": "integer"
+      },
+      "close": {
+     	"result": "integer",
+      	"bbcount": "integer"
+      },
+      "reads": [
+      	{
+      	  "type": "string", <-- this defines the type of syscall: read, pread64, readv and so on
+      	  "data": "bytes",
+      	  "data_size": "integer",
+      	  "result": "integer",
+      	  "bbcount": "integer"      	  
+      	},
+      	{
+      	  "type": "string", <-- this defines the type of syscall: read, pread64, readv and so on
+      	  "data": "bytes",
+      	  "data_size": "integer",
+      	  "result": "integer",
+      	  "bbcount": "integer"      	  
+       	},
+      ],
+      "writes": [
+        {
+      	  "type": "string", <-- this defines the type of syscall: write, pwrite64, writev and so on
+      	  "data": "bytes",
+      	  "data_size": "integer",
+      	  "result": "integer",
+      	  "bbcount": "integer"      	        	  
+      	},
+      	{
+      	  "type": "string", <-- this defines the type of syscall: write, pwrite64, writev and so on
+      	  "data": "bytes",
+      	  "data_size": "integer",
+      	  "result": "integer",
+      	  "bbcount": "integer"      	  
+      	},
+      ], 
+    },
+    "socket1": {
+    	"fd": "integer",
+    	"socket": {},
+    	"bind": {},
+    	"accept": {},
+    	"recv": [
+        {
+      	  "params_1":
+      	},
+      	{
+      	  "params_2":
+      	}, 
+    	],
+    	"send": [
+        {
+      	  "params_1":
+      	},
+      	{
+      	  "params_2":
+      	}, 
+      	],
+    }
+  ]
+}
+
