@@ -91,7 +91,7 @@ class ToolCall:
         table.add_row("Operation:", self.tool)
         args_fmt = ", ".join(f"{k}={v}" for k, v in self.args.items())
         if args_fmt:
-            table.add_row("Arguments:", args_fmt)
+            table.add_row("Arguments:", escape(args_fmt))
         table.add_row("Thoughts:", self.hypothesis)
 
         box.add_row(table)
