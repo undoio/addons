@@ -457,6 +457,7 @@ class UdbMcpGateway:
             # We're at the start of the target function, now we need to get to the end.
             self.udb.execution.finish()
             return_value = gdb.parse_and_eval("$")
+            return_value.fetch_lazy()
 
             # Step back into the end of the function.
             self.udb.execution.reverse_step(cmd="reverse-step")
