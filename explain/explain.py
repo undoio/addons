@@ -489,20 +489,24 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_print(self, expression: str) -> str:
+    def tool_print(self, expressions: list[str]) -> list[str]:
         """
-        Get the value of an expression.
+        Get the value of one or more expressions at the current point in program history.
 
         This should NOT be used to retrieve the value of GDB value history
         variables such as $0, $1, $2, etc.
 
-        Do NOT use the C comma "," operator to attempt to print multiple values. This will produce
-        misleading output. To print multiple values you should call the `print` tool once for each.
-
         Params:
-        expression -- the expression to be evaluated.
+        expressions -- the expressions to be evaluated.
         """
-        return str(gdb.parse_and_eval(expression))
+        def _safe_eval(e: str) -> str:
+            try:
+                v = gdb.parse_and_eval(e)
+                return str(v)
+            except Exception as e:
+                return str(e)
+
+        return "\n".join(f"{e} = {_safe_eval(e)}" for e in expressions)
 
     @report
     @chain_of_thought
