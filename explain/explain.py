@@ -465,6 +465,15 @@ class UdbMcpGateway:
             # Check that we got back into the function we intended.
             assert gdb.selected_frame().name() == target_fn
 
+            if gdb.selected_frame().function().type.target() != gdb.TYPE_CODE_VOID:
+                # Step further back to ensure we're at the return statement.
+                with gdbutils.temporary_parameter("listsize", 1):
+                    while "return" not in gdbutils.execute_to_string("list"):
+                        self.udb.execution.reverse_step(cmd="reverse-step")
+
+                # Check we're still in the function we intended.
+                assert gdb.selected_frame().name() == target_fn
+
         if LOG_LEVEL == "DEBUG":
             print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
 
