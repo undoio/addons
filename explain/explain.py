@@ -302,7 +302,6 @@ class UdbMcpGateway:
 
     @report
     @source_context
-    @collect_output
     @chain_of_thought
     def tool_last_value(self, expression: str) -> None:
         """
@@ -317,11 +316,20 @@ class UdbMcpGateway:
         This should NOT be used for debugger convenience variables (starting with a $), since this
         will be very slow.
 
-        Use expressions that are based solely on variables or memory locations.
+        Use expressions that are based solely on variables or memory locations. This may be used on
+        both global and local variables to understand the flow of data in the program.  Where
+        applicable it may be more efficient than stepping by source line.
         """
-        self.udb.last.execute_command(
-            expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
-        )
+        with gdbio.CollectOutput() as collector:
+            self.udb.last.execute_command(
+                expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
+            )
+            self.udb.last.execute_command(
+                expression, direction=udb_last.Direction.FORWARD, is_repeated=False
+            )
+        later_value = gdb.parse_and_eval(expression)
+
+        return f"Expression {expression} has just been assigned value {later_value}"
 
     @report
     @source_context
