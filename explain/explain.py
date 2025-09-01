@@ -363,11 +363,38 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_finish(self) -> None:
+    def tool_reverse_finish(self, target_fn: str) -> None:
         """
         Run backwards to before the current function was called.
+
+        This will traverse multiple levels of stack, if necessary, to get to the specified
+        target. Use this when walking up a call stack to reduce the number of calls to this tool,
+        which will improve performance.
+
+        On success it will pop at least one stack frame, even in recursive calls. On failure it will
+        return to the originally-selected stack frame.
+
+        Params:
+        target_fn: the function you want to reverse-finish back to. This must be present in
+                   the current backtrace or the command will fail.
         """
-        self.udb.execution.reverse_finish(cmd="reverse-finish")
+        orig_frame = gdbutils.selected_frame()
+        try:
+            frame = orig_frame.older()
+            while frame and frame.name() != target_fn:
+                frame = frame.older()
+
+            if not frame:
+                raise Exception("No such frame in current backtrace.")
+
+            # Finish out into the specified frame.
+            frame.newer().select()
+            self.udb.execution.reverse_finish(cmd="reverse-finish")
+
+            assert gdbutils.selected_frame().name() == target_fn
+        except:
+            orig_frame.select()
+            raise
 
     @report
     @source_context
