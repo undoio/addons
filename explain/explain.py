@@ -316,6 +316,9 @@ class UdbMcpGateway:
         This should NOT be used for debugger convenience variables (starting with a $), since this
         will be very slow.
 
+        This should NOT be used on code (such as functions) unless it is being accessed via a
+        function pointer, since code will not change.
+
         Use expressions that are based solely on variables or memory locations. This may be used on
         both global and local variables to understand the flow of data in the program.  Where
         applicable it may be more efficient than stepping by source line.
