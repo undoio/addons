@@ -173,13 +173,16 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
     """
 
     @functools.wraps(fn)
-    def wrapped(*args: Any, **kwargs: Any):
-        out = fn(*args, **kwargs)
+    def wrapped(self, *args: Any, **kwargs: Any):
+        out = fn(self, *args, **kwargs)
 
         frame = gdb.selected_frame()
         sal = frame.find_sal()
 
         context = f"\nFunction: {frame.name()}\n"
+
+        if bookmarks := self.udb.bookmarks.get_at_time(self.udb.time.get()):
+            context += f"\nAt bookmarks: {', '.join(bookmarks)}\n"
 
         source = None
         if sal and sal.symtab:
@@ -299,7 +302,6 @@ class UdbMcpGateway:
 
     @report
     @source_context
-    @collect_output
     @chain_of_thought
     def tool_last_value(self, expression: str) -> None:
         """
@@ -314,11 +316,23 @@ class UdbMcpGateway:
         This should NOT be used for debugger convenience variables (starting with a $), since this
         will be very slow.
 
-        Use expressions that are based solely on variables or memory locations.
+        This should NOT be used on code (such as functions) unless it is being accessed via a
+        function pointer, since code will not change.
+
+        Use expressions that are based solely on variables or memory locations. This may be used on
+        both global and local variables to understand the flow of data in the program.  Where
+        applicable it may be more efficient than stepping by source line.
         """
-        self.udb.last.execute_command(
-            expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
-        )
+        with gdbio.CollectOutput() as collector:
+            self.udb.last.execute_command(
+                expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
+            )
+            self.udb.last.execute_command(
+                expression, direction=udb_last.Direction.FORWARD, is_repeated=False
+            )
+        later_value = gdb.parse_and_eval(expression)
+
+        return f"Expression {expression} has just been assigned value {later_value}"
 
     @report
     @source_context
@@ -360,11 +374,38 @@ class UdbMcpGateway:
     @source_context
     @collect_output
     @chain_of_thought
-    def tool_reverse_finish(self) -> None:
+    def tool_reverse_finish(self, target_fn: str) -> None:
         """
         Run backwards to before the current function was called.
+
+        This will traverse multiple levels of stack, if necessary, to get to the specified
+        target. Use this when walking up a call stack to reduce the number of calls to this tool,
+        which will improve performance.
+
+        On success it will pop at least one stack frame, even in recursive calls. On failure it will
+        return to the originally-selected stack frame.
+
+        Params:
+        target_fn: the function you want to reverse-finish back to. This must be present in
+                   the current backtrace or the command will fail.
         """
-        self.udb.execution.reverse_finish(cmd="reverse-finish")
+        orig_frame = gdbutils.selected_frame()
+        try:
+            frame = orig_frame.older()
+            while frame and frame.name() != target_fn:
+                frame = frame.older()
+
+            if not frame:
+                raise Exception("No such frame in current backtrace.")
+
+            # Finish out into the specified frame.
+            frame.newer().select()
+            self.udb.execution.reverse_finish(cmd="reverse-finish")
+
+            assert gdbutils.selected_frame().name() == target_fn
+        except:
+            orig_frame.select()
+            raise
 
     @report
     @source_context
@@ -419,12 +460,22 @@ class UdbMcpGateway:
             # We're at the start of the target function, now we need to get to the end.
             self.udb.execution.finish()
             return_value = gdb.parse_and_eval("$")
+            return_value.fetch_lazy()
 
             # Step back into the end of the function.
             self.udb.execution.reverse_step(cmd="reverse-step")
 
             # Check that we got back into the function we intended.
             assert gdb.selected_frame().name() == target_fn
+
+            if gdb.selected_frame().function().type.target() != gdb.TYPE_CODE_VOID:
+                # Step further back to ensure we're at the return statement.
+                with gdbutils.temporary_parameter("listsize", 1):
+                    while "return" not in gdbutils.execute_to_string("list"):
+                        self.udb.execution.reverse_step(cmd="reverse-step")
+
+                # Check we're still in the function we intended.
+                assert gdb.selected_frame().name() == target_fn
 
         if LOG_LEVEL == "DEBUG":
             print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
@@ -441,20 +492,24 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_print(self, expression: str) -> str:
+    def tool_print(self, expressions: list[str]) -> list[str]:
         """
-        Get the value of an expression.
+        Get the value of one or more expressions at the current point in program history.
 
         This should NOT be used to retrieve the value of GDB value history
         variables such as $0, $1, $2, etc.
 
-        Do NOT use the C comma "," operator to attempt to print multiple values. This will produce
-        misleading output. To print multiple values you should call the `print` tool once for each.
-
         Params:
-        expression -- the expression to be evaluated.
+        expressions -- the expressions to be evaluated.
         """
-        return str(gdb.parse_and_eval(expression))
+        def _safe_eval(e: str) -> str:
+            try:
+                v = gdb.parse_and_eval(e)
+                return str(v)
+            except Exception as e:
+                return str(e)
+
+        return "\n".join(f"{e} = {_safe_eval(e)}" for e in expressions)
 
     @report
     @chain_of_thought
@@ -467,6 +522,8 @@ class UdbMcpGateway:
         Params:
         name - a descriptive name for the current point of interest.
         """
+        if clashes := self.udb.bookmarks.get_at_time(self.udb.time.get()):
+            raise Exception(f"This time is already bookmarked: {', '.join(clashes)}")
         self.udb.bookmarks.add(name)
 
     @report
@@ -475,9 +532,16 @@ class UdbMcpGateway:
         """
         Returns the names of previously-stored bookmarks.
 
-        Use this to query interesting points in time that are already identified.
+        Use this to query interesting points in time that are already identified. These are
+        returned in time order, with earlier results earlier in recorded history.
+
+        A special "# Current time" value denotes the current point in program history.
         """
-        return "\n".join(self.udb.bookmarks.iter_bookmark_names())
+        bookmarks = list(self.udb.bookmarks.iter_bookmarks())
+        bookmarks.append(("# Current time", self.udb.time.get()))
+
+        # Sort by engine.Time value.
+        return "\n".join((name for name, _ in sorted(bookmarks, key=lambda b: b[1])))
 
     @report
     @source_context
@@ -561,6 +625,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
     gateway = UdbMcpGateway(udb)
     with (
         gdbutils.temporary_parameter("pagination", False),
+        gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
@@ -646,6 +711,8 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
     with (
         gdbutils.temporary_parameter("pagination", False),
+        gdbutils.temporary_parameter("confirm", False),
+        gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),

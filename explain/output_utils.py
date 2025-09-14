@@ -80,6 +80,22 @@ class ToolCall:
         assert self.exit_stack is not None
         self.exit_stack.close()
 
+    @staticmethod
+    def _format_arg(arg: Any) -> str:
+        match arg:
+            case [e]:
+                # Single element list, just format the contents.
+                return ToolCall._format_arg(e)
+            case list(elements):
+                # Longer list, format all elements separately and group as a list.
+                contents = ", ".join(ToolCall._format_arg(e) for e in elements)
+                return f"[ {contents} ]"
+            case str(x):
+                # Just show strings as-is.
+                return x
+            case _:
+                return repr(arg)
+
     def _generate(self) -> ExplainPanel:
         box = Table.grid()
         box.add_column("Items")
@@ -89,9 +105,9 @@ class ToolCall:
         table.add_column("Value")
 
         table.add_row("Operation:", self.tool)
-        args_fmt = ", ".join(f"{k}={v}" for k, v in self.args.items())
+        args_fmt = ", ".join(f"{k}={ToolCall._format_arg(v)}" for k, v in self.args.items())
         if args_fmt:
-            table.add_row("Arguments:", args_fmt)
+            table.add_row("Arguments:", escape(args_fmt))
         table.add_row("Thoughts:", self.hypothesis)
 
         box.add_row(table)
