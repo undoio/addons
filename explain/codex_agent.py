@@ -4,11 +4,9 @@ Codex agent implementation.
 
 import asyncio
 import json
-import shutil
 import sys
 from dataclasses import dataclass
 from itertools import chain, repeat
-from pathlib import Path
 from typing import ClassVar
 
 from .agents import BaseAgent
@@ -23,19 +21,6 @@ class CodexAgent(BaseAgent):
     name: ClassVar[str] = "codex"
     program_name: ClassVar[str] = "codex"
     display_name: ClassVar[str] = "Codex"
-
-    @classmethod
-    def find_binary(cls) -> Path | None:
-        """
-        Find and return the path to the Codex binary.
-
-        Returns:
-            Path to the Codex binary, or None if not found
-        """
-        if loc := shutil.which(cls.program_name):
-            return Path(loc)
-        else:
-            return None
 
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """
