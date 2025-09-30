@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -38,8 +37,8 @@ class ClaudeAgent(BaseAgent):
         """
         claude_local_install_path = Path.home() / ".claude" / "local" / cls.program_name
 
-        if loc := shutil.which(cls.program_name):
-            return Path(loc)
+        if loc := super().find_binary():
+            return loc
         elif claude_local_install_path.exists():
             return claude_local_install_path
 

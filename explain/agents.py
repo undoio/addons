@@ -5,6 +5,7 @@ Agent registry system for AI coding assistants.
 from __future__ import annotations
 
 import os
+import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +36,6 @@ class BaseAgent(ABC):
         AgentRegistry.agents[cls.name] = cls
 
     @classmethod
-    @abstractmethod
     def find_binary(cls) -> Path | None:
         """
         Find and return the path to the agent binary.
@@ -43,6 +43,10 @@ class BaseAgent(ABC):
         Returns:
             Path to the agent binary, or None if not found
         """
+        if loc := shutil.which(cls.program_name):
+            return Path(loc)
+        else:
+            return None
 
     @abstractmethod
     async def ask(self, question: str, port: int, tools: list[str]) -> str:

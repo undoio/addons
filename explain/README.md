@@ -54,6 +54,7 @@ agent. This must be one of:
  * [Claude Code](https://www.anthropic.com/claude-code)
  * [Amp](https://ampcode.com/)
  * [Codex CLI](https://developers.openai.com/codex/cli/)
+ * [Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli)
 
 If the extension detects an installation of one of these it will attempt to use it to answer your
 questions about the program's recorded history.
