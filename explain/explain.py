@@ -478,6 +478,11 @@ class UdbMcpGateway:
                 # Check we're still in the function we intended.
                 assert gdb.selected_frame().name() == target_fn
 
+                # And that we've not gone back further than planned.
+                assert target_start_bp.hit_count == 1, (
+                    "Unexpectedly reached the start of the target function."
+                )
+
         if LOG_LEVEL == "DEBUG":
             print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
 
