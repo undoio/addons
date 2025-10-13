@@ -459,7 +459,18 @@ class UdbMcpGateway:
             assert gdb.selected_frame().name() == target_fn
 
             # We're at the start of the target function, now we need to get to the end.
+            cxa_throw_bp = gdb.Breakpoint("__cxa_throw")
             self.udb.execution.finish()
+            if cxa_throw_bp.hit_count:
+                # Get back out of __cxa_throw and (hopefully) into the code that threw.
+                self.udb.execution.reverse_finish(cmd="reverse-finish")
+                # Bail out early here - the rest of the function wasn't run and there's no return to
+                # handle.
+                return (
+                    f"Stopping early: An exception was thrown while attempting to step into "
+                    f"{target_fn}"
+                )
+
             return_value = gdb.parse_and_eval("$")
             return_value.fetch_lazy()
 
