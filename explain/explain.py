@@ -473,7 +473,7 @@ class UdbMcpGateway:
                 # Step further back to ensure we're at the return statement.
                 with gdbutils.temporary_parameter("listsize", 1):
                     while "return" not in gdbutils.execute_to_string("list"):
-                        self.udb.execution.reverse_step(cmd="reverse-step")
+                        self.udb.execution.reverse_next(cmd="reverse-next")
 
                 # Check we're still in the function we intended.
                 assert gdb.selected_frame().name() == target_fn
