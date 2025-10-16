@@ -1,5 +1,4 @@
 import gdb
-
 from undo.debugger_extensions import udb
 
 

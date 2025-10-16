@@ -2,7 +2,9 @@
 
 import os
 import re
+
 import gdb
+
 
 # Pattern to match output of 'info files'
 pattern = re.compile(

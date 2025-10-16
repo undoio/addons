@@ -3,6 +3,7 @@ from typing import Dict
 
 import gdb
 
+
 try:
     from elftools.elf.elffile import ELFFile
 except ModuleNotFoundError:

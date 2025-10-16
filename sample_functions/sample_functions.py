@@ -13,15 +13,10 @@ Copyright (C) 2019 Undo Ltd
 """
 
 import sys
-
 from collections import defaultdict
 
 import gdb
-
-from undo.debugger_extensions import (
-    debugger_utils,
-    udb,
-)
+from undo.debugger_extensions import debugger_utils, udb
 
 
 class SampleFunctions(gdb.Command):

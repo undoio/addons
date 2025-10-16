@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
+from contextlib import AbstractContextManager
 from typing import AnyStr, Generic, TypedDict, TypeVar
-
-from typing_extensions import Buffer
 
 # Import the GDB types from src.udbpy.[...], not udbpy.[...] as it's how mypy imports them when
 # checking gdb_extensions code.
 # That is, if it were imported directly via udbpy, then mypy would complain that
 # src.udbpy.gdb_extensions.gdbtypes.Foo is different from udbpy.gdb_extensions.gdbtypes.Foo.
 from src.udbpy.gdb_extensions import gdbtypes
+from typing_extensions import Buffer
 
 from . import events
 

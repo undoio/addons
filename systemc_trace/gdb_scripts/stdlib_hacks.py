@@ -54,9 +54,7 @@ class StdVectorView:
             if element_type.code == gdb.TYPE_CODE_PTR:
                 pointed_to = element.dereference()
                 assert pointed_to.dynamic_type.name
-                res += (
-                    "[" + str(ii) + "] type = " + pointed_to.dynamic_type.name + " *\n"
-                )
+                res += "[" + str(ii) + "] type = " + pointed_to.dynamic_type.name + " *\n"
             else:
                 assert element.dynamic_type.name
                 res += "[" + str(ii) + "] type = " + element.dynamic_type.name + "\n"

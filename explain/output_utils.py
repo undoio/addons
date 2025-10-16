@@ -22,6 +22,7 @@ from rich.panel import Panel
 from rich.table import Table
 from src.udbpy.termstyles import Color, Intensity, ansi_format
 
+
 console = Console(force_terminal=True)
 
 
@@ -86,11 +87,11 @@ class ToolCall:
             case [e]:
                 # Single element list, just format the contents.
                 return ToolCall._format_arg(e)
-            case list(elements):
+            case [*elements]:
                 # Longer list, format all elements separately and group as a list.
                 contents = ", ".join(ToolCall._format_arg(e) for e in elements)
                 return f"[ {contents} ]"
-            case str(x):
+            case str() as x:
                 # Just show strings as-is.
                 return x
             case _:

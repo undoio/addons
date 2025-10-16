@@ -7,7 +7,9 @@ Copyright (C) 2019 Undo Ltd
 """
 
 import re
+
 import gdb
+
 
 # Pattern to parse map.
 begin_pattern = re.compile(r"\s+0x(?P<begin>[0-9a-f]+)\s+0x(?P<end>[0-9a-f]+).*")

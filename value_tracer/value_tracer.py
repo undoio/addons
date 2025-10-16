@@ -54,9 +54,7 @@ def _print_var_diffs(
     reverse_op: bool = False,
 ) -> None:
     changed_vals = {
-        var: val
-        for var, val in after_vals.items()
-        if (var, val) not in before_vals.items()
+        var: val for var, val in after_vals.items() if (var, val) not in before_vals.items()
     }
     arrow = "<-" if reverse_op else "->"
     for var, val in changed_vals.items():
@@ -143,9 +141,7 @@ def _execution_op_with_locals(cmd: str, quiet: bool = False) -> None:
         _print_var_diffs(before_vals, after_vals, cmd in reverse_ops)
 
 
-@command.register(
-    gdb.COMMAND_STATUS, arg_parser=command_args.Choice(forward_ops + reverse_ops)
-)
+@command.register(gdb.COMMAND_STATUS, arg_parser=command_args.Choice(forward_ops + reverse_ops))
 def value_tracer(udb: udb_base.Udb, cmd: str) -> None:
     """
     Perform a (reverse) execution operation showing locals before and after.
@@ -254,8 +250,7 @@ def value_tracer_inline(udb: udb_base.Udb) -> None:
                     # The RE aims to recognise "foo=", "foo +=" etc
                     # but not "bar->foo=" or "foo=="
                     code_line = re.sub(
-                        variable_re
-                        + rf"\s*(?P<op>\+|\-|\*|\/|%|\&|\||\<\<|\>\>|\^)?=(?!=)",
+                        variable_re + rf"\s*(?P<op>\+|\-|\*|\/|%|\&|\||\<\<|\>\>|\^)?=(?!=)",
                         functools.partial(replace_updates, value_label),
                         code_line,
                     )

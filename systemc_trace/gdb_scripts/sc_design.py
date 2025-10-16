@@ -159,7 +159,7 @@ class Collector:
         # timescale is in femtoseconds
         _t = int(timescale)
         index = 0
-        while _t % 1000 == 0:
+        while not _t % 1000:
             _t //= 1000
             index += 1
 
@@ -167,9 +167,7 @@ class Collector:
         timescale_str = f"{_t} {suffixes[index]}"
 
         # FIXME date
-        self.writer = vcd.VCDWriter(
-            self.trace_file, timescale=timescale_str, date="today"
-        )
+        self.writer = vcd.VCDWriter(self.trace_file, timescale=timescale_str, date="today")
 
     def done(self) -> None:
         """Declare tracing complete."""
@@ -232,6 +230,7 @@ class Collector:
                 actual = bool(value)
             else:
                 print(f"Unknown type {value.type} ({value.type})")
+                continue
             # FIXME time units are probably wrong
             # FIXME casting everything to int
             self.writer.change(vcd_var, time_stamp, actual)
@@ -373,9 +372,7 @@ class SCModule:
 
     def trace_signal_tf(self, tracer: Collector, signal_path: list[str]) -> None:
         if len(signal_path) > 1:
-            child_mod = [
-                mod for mod in self.child_modules if mod.basename() == signal_path[0]
-            ]
+            child_mod = [mod for mod in self.child_modules if mod.basename() == signal_path[0]]
             assert len(child_mod) == 1
             child_mod[0].trace_signal_tf(tracer, signal_path[1:])
         else:
