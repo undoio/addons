@@ -63,3 +63,18 @@ The [`master`](https://github.com/undoio/addons/tree/dev) branch supports the
 latest release of UDB.
 The [`dev`](https://github.com/undoio/addons/tree/dev) branch contains code
 meant for the next future release of UDB.
+
+### Linting
+
+Python code is linted using [pre-commit](https://pre-commit.com/) with black, pylint, and mypy.
+
+Setup (one-time):
+```bash
+pip install pre-commit
+pre-commit install  # Optional: auto-run on git commit
+```
+
+Run linters:
+```bash
+pre-commit run --all-files
+```
