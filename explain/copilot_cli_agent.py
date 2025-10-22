@@ -6,7 +6,6 @@ import asyncio
 import itertools
 import json
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -106,6 +105,13 @@ class CopilotCLIAgent(BaseAgent):
             prompt = question
 
         allowed_tools = ["UDB_Server", "shell(grep)", "shell(find)", "shell(cat)", "shell(xargs)"]
+        env = {
+            "XDG_CONFIG_HOME": str(self._tempdir),
+            "XDG_STATE_HOME": str(self._tempdir),
+        }
+        if runtime_dir := os.environ.get("XDG_RUNTIME_DIR"):
+            # Pass through runtime state so it has auth access.
+            env["XDG_RUNTIME_DIR"] = runtime_dir
 
         try:
             copilot = await asyncio.create_subprocess_exec(
@@ -121,12 +127,7 @@ class CopilotCLIAgent(BaseAgent):
                 "claude-sonnet-4.5",
                 "-p",
                 prompt,
-                env={
-                    "XDG_CONFIG_HOME": self._tempdir,
-                    "XDG_STATE_HOME": self._tempdir,
-                    # Pass through runtime state so it has auth access.
-                    "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR"),
-                },
+                env=env,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -140,10 +141,10 @@ class CopilotCLIAgent(BaseAgent):
                 copilot.terminate()
                 await copilot.wait()
 
-            stderr_bytes = await copilot.stderr.read()
-
-            if copilot and copilot.returncode and stderr_bytes:
-                print("Errors:\n", stderr_bytes.decode("utf-8"))
+            if copilot and copilot.stderr:
+                stderr_bytes = await copilot.stderr.read()
+                if copilot.returncode and stderr_bytes:
+                    print("Errors:\n", stderr_bytes.decode("utf-8"))
 
         self._resume = True
 

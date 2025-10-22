@@ -6,6 +6,7 @@
 *.undo
 .DS_Store
 .mypy_cache
+.pre-commit-cache
 
 # Ignore tags and editor-related files.
 GPATH

@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Iterator, NoReturn, Optional
 
 import gdb
-
 from undo.debugger_extensions import debugger_io, debugger_utils, udb
 
 

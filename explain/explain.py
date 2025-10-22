@@ -19,7 +19,7 @@ import socket
 import unittest.mock
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Concatenate, ParamSpec, TypeAlias, TypeVar
+from typing import Any, Concatenate, Literal, ParamSpec, TypeAlias, TypeVar, cast
 
 import gdb
 import uvicorn.server
@@ -37,11 +37,12 @@ from .codex_agent import CodexAgent  # pylint: disable=unused-import
 from .copilot_cli_agent import CopilotCLIAgent  # pylint: disable=unused-import
 from .output_utils import console_whizz, print_agent, print_explanation, print_tool_call
 
+
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
-uvicorn.server.HANDLED_SIGNALS = ()
+uvicorn.server.HANDLED_SIGNALS = ()  # type: ignore[assignment]
 
 # Switch the debug level to get more context if the MCP server is misbehaving.
-LOG_LEVEL = "CRITICAL"
+LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "CRITICAL"
 # LOG_LEVEL="DEBUG"
 
 
@@ -60,7 +61,7 @@ agent: BaseAgent | None = None
 """Agent instance for the current session."""
 
 
-def report(fn: Callable[P, str | None]) -> Callable[P, str]:
+def report(fn: Callable[P, T]) -> Callable[P, T | str]:
     """
     Wrap a tool to report on the current thinking state (if appropriate) and result.
     """
@@ -74,6 +75,7 @@ def report(fn: Callable[P, str | None]) -> Callable[P, str]:
         hypothesis = binding.arguments.pop("hypothesis")  # We'll report this one separately.
         binding.arguments.pop("self")
         with print_tool_call(tool_name, hypothesis, binding.arguments) as tool_call:
+            results: T | str
             try:
                 results = fn(*args, **kwargs)
             except Exception as e:
@@ -83,7 +85,7 @@ def report(fn: Callable[P, str | None]) -> Callable[P, str]:
                 if results is None:
                     results = ""
 
-                tool_call.report_result(results.rstrip())
+                tool_call.report_result(str(results).rstrip())
 
         return results
 
@@ -196,7 +198,7 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
 
         return out + context
 
-    return wrapped
+    return cast(Callable[P, str], wrapped)
 
 
 def chain_of_thought(
@@ -304,7 +306,7 @@ class UdbMcpGateway:
     @report
     @source_context
     @chain_of_thought
-    def tool_last_value(self, expression: str) -> None:
+    def tool_last_value(self, expression: str) -> str:
         """
         Wind back time to the last time an expression was modified.
 
@@ -324,7 +326,7 @@ class UdbMcpGateway:
         both global and local variables to understand the flow of data in the program.  Where
         applicable it may be more efficient than stepping by source line.
         """
-        with gdbio.CollectOutput() as collector:
+        with gdbio.CollectOutput():
             self.udb.last.execute_command(
                 expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
             )
@@ -480,7 +482,8 @@ class UdbMcpGateway:
             # Check that we got back into the function we intended.
             assert gdb.selected_frame().name() == target_fn
 
-            if gdb.selected_frame().function().type.target() != gdb.TYPE_CODE_VOID:
+            func = gdb.selected_frame().function()
+            if func and func.type.target() != gdb.TYPE_CODE_VOID:
                 # Step further back to ensure we're at the return statement.
                 with gdbutils.temporary_parameter("listsize", 1):
                     while "return" not in gdbutils.execute_to_string("list"):
@@ -490,9 +493,9 @@ class UdbMcpGateway:
                 assert gdb.selected_frame().name() == target_fn
 
                 # And that we've not gone back further than planned.
-                assert target_start_bp.hit_count == 1, (
-                    "Unexpectedly reached the start of the target function."
-                )
+                assert (
+                    target_start_bp.hit_count == 1
+                ), "Unexpectedly reached the start of the target function."
 
         if LOG_LEVEL == "DEBUG":
             print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
@@ -509,7 +512,7 @@ class UdbMcpGateway:
 
     @report
     @chain_of_thought
-    def tool_print(self, expressions: list[str]) -> list[str]:
+    def tool_print(self, expressions: list[str]) -> str:
         """
         Get the value of one or more expressions at the current point in program history.
 
@@ -519,6 +522,7 @@ class UdbMcpGateway:
         Params:
         expressions -- the expressions to be evaluated.
         """
+
         def _safe_eval(e: str) -> str:
             try:
                 v = gdb.parse_and_eval(e)

@@ -24,8 +24,7 @@ WatchPointType = NewType("WatchPointType", int)
 
 
 class PrettyPrinterProtocol(Protocol):
-    def to_string(self) -> str:
-        ...
+    def to_string(self) -> str: ...
 
 
 PrettyPrinterFunc = Callable[[Any], Optional[PrettyPrinterProtocol]]

@@ -2,11 +2,7 @@ import datetime
 import re
 
 import gdb
-
-from undo.debugger_extensions import (
-    debugger_utils,
-    udb,
-)
+from undo.debugger_extensions import debugger_utils
 
 
 def str_to_delta(wallclock: str) -> datetime.timedelta:

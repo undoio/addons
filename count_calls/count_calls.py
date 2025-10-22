@@ -3,10 +3,7 @@
 import sys
 import textwrap
 
-from undo.udb_launcher import (
-    REDIRECTION_COLLECT,
-    UdbLauncher,
-)
+from undo.udb_launcher import REDIRECTION_COLLECT, UdbLauncher
 
 
 def main(argv):
@@ -35,7 +32,7 @@ def main(argv):
     # to the user but, in case of errors, we want to display it.
     res = launcher.run_debugger(redirect_debugger_output=REDIRECTION_COLLECT)
 
-    if res.exit_code == 0:
+    if not res.exit_code:
         # All good as UDB exited with exit code 0 (i.e. no errors).
         print(
             'The recording hit "{}" {} time(s).'.format(

@@ -1,0 +1,43 @@
+# Pre-commit configuration for linting Python files
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+# Update versions: pre-commit autoupdate
+
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args:
+          - --profile=black
+          - --line-length=100
+          - --lines-after-imports=2
+
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+        args:
+          - --target-version=py310
+          - --line-length=100
+
+  - repo: https://github.com/pycqa/pylint
+    rev: v4.0.1
+    hooks:
+      - id: pylint
+        args:
+          - --rcfile=_linters/pylintrc
+          - --reports=n
+          - --score=n
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        args:
+          - --follow-imports=silent
+          - --config-file=_linters/mypy.ini
+        additional_dependencies:
+          - rich
+          - uvicorn
+          - mcp

@@ -4,6 +4,7 @@ Static text assets loaded from external files.
 
 from pathlib import Path
 
+
 # Protected module global for asset file paths
 _EXTENSION_PATH = Path(__file__).parent
 
