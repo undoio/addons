@@ -5,6 +5,7 @@ Codex agent implementation.
 import asyncio
 import json
 import sys
+import textwrap
 from dataclasses import dataclass
 from itertools import chain, repeat
 from typing import ClassVar
@@ -113,5 +114,13 @@ class CodexAgent(BaseAgent):
 
             if codex and codex.returncode and stderr_bytes:
                 print("Errors:\n", stderr_bytes.decode("utf-8"))
+
+        if not result:
+            result = textwrap.dedent(
+                """\
+                Could not parse the response.
+                Try upgrading your codex application to the latest version.
+                """
+            )
 
         return result
