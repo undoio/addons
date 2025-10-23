@@ -32,21 +32,31 @@ class CodexAgent(BaseAgent):
             if self.log_level == "DEBUG":
                 print("Message:", line_data)
 
-            msg = line_data.get("msg")
-            if not msg:
-                continue
+            match line_data:
+                case {"type": "turn.completed"}:
+                    # We're done.
+                    break
+                case {"type": "item.completed", "item": item}:
+                    # Extract the "item" member from completed items.
+                    pass
+                case _:
+                    # For any other message, just keep going.
+                    continue
 
-            if msg.get("type") == "task_complete":
-                result = msg["last_agent_message"]
-                continue
-
-            if msg.get("type") != "agent_message":
-                continue
-
-            content = msg["message"]
-            print_assistant_message(content)
-
-            result = repr(msg)
+            # React to a completed "item".
+            match item:
+                case {"type": "reasoning", "text": text}:
+                    # Report the reasoning, if this codex feature is turned on.
+                    print_assistant_message(text)
+                case {"type": "agent_message", "text": result}:
+                    # Agent messages are added to the end of the run, whose result is returned.
+                    # https://github.com/openai/codex/blob/main/docs/exec.md#json-output-mode
+                    print_assistant_message(result)
+                case {"type": "command_execution", "command": command}:
+                    # Report the execution of non-Undo tools. For now, we don't report the result.
+                    print_assistant_message(command)
+                case _:
+                    continue
 
         return result
 
