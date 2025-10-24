@@ -14,7 +14,6 @@ import contextlib
 import functools
 import inspect
 import random
-import re
 import socket
 import unittest.mock
 from collections.abc import Callable
@@ -116,43 +115,12 @@ SOURCE_CONTEXT_LINES = 5
 """The maximum size of source context to show either side of the current position."""
 
 
-@functools.cache
-def get_substitute_paths() -> list[tuple[Path, Path]]:
-    """
-    Query substitute path settings from the debugger.
-    """
-    out = gdbutils.execute_to_string("show substitute-path")
-    path_re = re.compile(r"\s+`(?P<in_prefix>[^']+)' -> `(?P<out_prefix>[^']+)'")
-
-    path_map: list[tuple[Path, Path]] = []
-    for l in out.splitlines():
-        m = path_re.match(l)
-        if not m:
-            continue
-        path_map.append((Path(m["in_prefix"]), Path(m["out_prefix"])))
-
-    return path_map
-
-
-def get_path(fname: str) -> Path:
-    """
-    Get the real filesystem path for a named file, taking into account substitutions.
-    """
-    p = Path(fname)
-    for in_path, out_path in get_substitute_paths():
-        if p.is_relative_to(in_path):
-            rel_path = p.relative_to(in_path)
-            return out_path.joinpath(rel_path)
-    return Path(fname)
-
-
 def get_context(fname: str, line: int) -> str:
     """
     Return formatted file context surrounding the current debug location.
     """
-    f = get_path(fname)
     try:
-        lines = Path(f).read_text(encoding="UTF-8").split("\n")
+        lines = Path(fname).read_text(encoding="UTF-8").split("\n")
     except FileNotFoundError:
         return ""
 
@@ -189,7 +157,7 @@ def source_context(fn: Callable[P, str]) -> Callable[P, str]:
 
         source = None
         if sal and sal.symtab:
-            source = get_context(sal.symtab.filename, sal.line)
+            source = get_context(sal.symtab.fullname(), sal.line)
 
         if source:
             context += "\nSource context:\n" + source
