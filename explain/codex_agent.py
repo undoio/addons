@@ -23,6 +23,8 @@ class CodexAgent(BaseAgent):
     program_name: ClassVar[str] = "codex"
     display_name: ClassVar[str] = "Codex"
 
+    _session_id: str | None = None
+
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """
         Handle streamed messages from Codex until a final result, which is returned.
@@ -40,6 +42,10 @@ class CodexAgent(BaseAgent):
                 case {"type": "item.completed", "item": item}:
                     # Extract the "item" member from completed items.
                     pass
+                case {"type": "thread.started", "thread_id": session_id}:
+                    # Fetch the session ID so messages are a part of the same conversation.
+                    self._session_id = session_id
+                    continue
                 case _:
                     # For any other message, just keep going.
                     continue
@@ -97,6 +103,7 @@ class CodexAgent(BaseAgent):
                 "--json",
                 "--skip-git-repo-check",
                 "\n".join([SYSTEM_PROMPT, CODEX_PROMPT, question]),
+                *(["resume", self._session_id] if self._session_id else []),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
