@@ -5,6 +5,7 @@ Codex agent implementation.
 import asyncio
 import json
 import sys
+import textwrap
 from dataclasses import dataclass
 from itertools import chain, repeat
 from typing import ClassVar
@@ -22,6 +23,8 @@ class CodexAgent(BaseAgent):
     program_name: ClassVar[str] = "codex"
     display_name: ClassVar[str] = "Codex"
 
+    _session_id: str | None = None
+
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """
         Handle streamed messages from Codex until a final result, which is returned.
@@ -32,21 +35,35 @@ class CodexAgent(BaseAgent):
             if self.log_level == "DEBUG":
                 print("Message:", line_data)
 
-            msg = line_data.get("msg")
-            if not msg:
-                continue
+            match line_data:
+                case {"type": "turn.completed"}:
+                    # We're done.
+                    break
+                case {"type": "item.completed", "item": item}:
+                    # Extract the "item" member from completed items.
+                    pass
+                case {"type": "thread.started", "thread_id": session_id}:
+                    # Fetch the session ID so messages are a part of the same conversation.
+                    self._session_id = session_id
+                    continue
+                case _:
+                    # For any other message, just keep going.
+                    continue
 
-            if msg.get("type") == "task_complete":
-                result = msg["last_agent_message"]
-                continue
-
-            if msg.get("type") != "agent_message":
-                continue
-
-            content = msg["message"]
-            print_assistant_message(content)
-
-            result = repr(msg)
+            # React to a completed "item".
+            match item:
+                case {"type": "reasoning", "text": text}:
+                    # Report the reasoning, if this codex feature is turned on.
+                    print_assistant_message(text)
+                case {"type": "agent_message", "text": result}:
+                    # Agent messages are added to the end of the run, whose result is returned.
+                    # https://github.com/openai/codex/blob/main/docs/exec.md#json-output-mode
+                    print_assistant_message(result)
+                case {"type": "command_execution", "command": command}:
+                    # Report the execution of non-Undo tools. For now, we don't report the result.
+                    print_assistant_message(command)
+                case _:
+                    continue
 
         return result
 
@@ -86,6 +103,7 @@ class CodexAgent(BaseAgent):
                 "--json",
                 "--skip-git-repo-check",
                 "\n".join([SYSTEM_PROMPT, CODEX_PROMPT, question]),
+                *(["resume", self._session_id] if self._session_id else []),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -103,5 +121,13 @@ class CodexAgent(BaseAgent):
 
             if codex and codex.returncode and stderr_bytes:
                 print("Errors:\n", stderr_bytes.decode("utf-8"))
+
+        if not result:
+            result = textwrap.dedent(
+                """\
+                Could not parse the response.
+                Try upgrading your codex application to the latest version.
+                """
+            )
 
         return result
