@@ -14,6 +14,7 @@ import contextlib
 import functools
 import inspect
 import random
+import re
 import socket
 import unittest.mock
 from collections.abc import Callable
@@ -288,22 +289,57 @@ class UdbMcpGateway:
         will be very slow.
 
         This should NOT be used on code (such as functions) unless it is being accessed via a
-        function pointer, since code will not change.
+        non-const function pointer, since code will not change.
 
         Use expressions that are based solely on variables or memory locations. This may be used on
         both global and local variables to understand the flow of data in the program.  Where
         applicable it may be more efficient than stepping by source line.
         """
-        with gdbio.CollectOutput():
-            self.udb.last.execute_command(
-                expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
-            )
-            self.udb.last.execute_command(
-                expression, direction=udb_last.Direction.FORWARD, is_repeated=False
-            )
-        later_value = gdb.parse_and_eval(expression)
+        # First, test whether the expression will make inferior calls and reject it if so - these
+        # will be too slow.
+        call_count = 0
 
-        return f"Expression {expression} has just been assigned value {later_value}"
+        def _call_handler(_):
+            nonlocal call_count
+            call_count += 1
+
+        with gdbutils.gdb_event_connected(gdb.events.inferior_call, _call_handler):
+            gdb.parse_and_eval(expression)
+
+        if call_count:
+            return (
+                f"Expression {expression} will cause function calls when evaluated. This tool "
+                f"does not querying expressions that call functions as doing so would be very "
+                f"slow. Consider querying for other data related to the value of this expression."
+            )
+
+        # Set up the reverse search itself.
+        search = udb_last._LastSearch.from_expression(  # pylint: disable=protected-access
+            self.udb, expression
+        )
+
+        result_backwards = search.search_change(udb_last.Direction.BACKWARD)
+
+        if not result_backwards.found_something:
+            return (
+                f"Expression {expression} didn't change value before the current point "
+                f"in time so there is no previous value to return."
+            )
+
+        # If we get here it did change value, so we'll position ourselves after the change.
+        result_forwards = search.search_change(udb_last.Direction.FORWARD)
+        assert result_forwards.found_something
+
+        message = result_forwards.output
+
+        if m := re.search(r".*Now =.*", message):
+            # If we found a value change, extract just the "Now =" part of the message.
+            message = m[0]
+
+        # Put short messages on the same line as "Expression changed".
+        separator = " " if len(message.splitlines()) == 1 else "\n"
+
+        return f"Expression {expression} changed:{separator}{message}"
 
     @report
     @source_context
