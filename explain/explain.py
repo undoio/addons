@@ -14,6 +14,7 @@ import contextlib
 import functools
 import inspect
 import random
+import re
 import socket
 import unittest.mock
 from collections.abc import Callable
@@ -222,6 +223,29 @@ def revert_time_on_failure(
     return wrapped
 
 
+def cpp_get_uncaught_exceptions():
+    """
+    Return the current number of uncaught exceptions on the current thread.
+    """
+    return int(gdb.parse_and_eval("__cxa_get_globals()->uncaught_exceptions"))
+
+
+def cpp_exception_state_present():
+    """
+    Do we have access to libstdc++ exception handling state in this program?
+    """
+    try:
+        cpp_get_uncaught_exceptions()
+        gdb.parse_and_eval("__cxa_throw")
+    except gdb.error as e:
+        e_str = str(e)
+        if e_str.startswith("No symbol") and e_str.endswith("in current context."):
+            return False
+        raise
+    else:
+        return True
+
+
 class UdbMcpGateway:
     """
     Plumbing class to expose selected UDB functionality as a set of tools to an MCP server.
@@ -288,22 +312,57 @@ class UdbMcpGateway:
         will be very slow.
 
         This should NOT be used on code (such as functions) unless it is being accessed via a
-        function pointer, since code will not change.
+        non-const function pointer, since code will not change.
 
         Use expressions that are based solely on variables or memory locations. This may be used on
         both global and local variables to understand the flow of data in the program.  Where
         applicable it may be more efficient than stepping by source line.
         """
-        with gdbio.CollectOutput():
-            self.udb.last.execute_command(
-                expression, direction=udb_last.Direction.BACKWARD, is_repeated=False
-            )
-            self.udb.last.execute_command(
-                expression, direction=udb_last.Direction.FORWARD, is_repeated=False
-            )
-        later_value = gdb.parse_and_eval(expression)
+        # First, test whether the expression will make inferior calls and reject it if so - these
+        # will be too slow.
+        call_count = 0
 
-        return f"Expression {expression} has just been assigned value {later_value}"
+        def _call_handler(_):
+            nonlocal call_count
+            call_count += 1
+
+        with gdbutils.gdb_event_connected(gdb.events.inferior_call, _call_handler):
+            gdb.parse_and_eval(expression)
+
+        if call_count:
+            return (
+                f"Expression {expression} will cause function calls when evaluated. This tool "
+                f"does not querying expressions that call functions as doing so would be very "
+                f"slow. Consider querying for other data related to the value of this expression."
+            )
+
+        # Set up the reverse search itself.
+        search = udb_last._LastSearch.from_expression(  # pylint: disable=protected-access
+            self.udb, expression
+        )
+
+        result_backwards = search.search_change(udb_last.Direction.BACKWARD)
+
+        if not result_backwards.found_something:
+            return (
+                f"Expression {expression} didn't change value before the current point "
+                f"in time so there is no previous value to return."
+            )
+
+        # If we get here it did change value, so we'll position ourselves after the change.
+        result_forwards = search.search_change(udb_last.Direction.FORWARD)
+        assert result_forwards.found_something
+
+        message = result_forwards.output
+
+        if m := re.search(r".*Now =.*", message):
+            # If we found a value change, extract just the "Now =" part of the message.
+            message = m[0]
+
+        # Put short messages on the same line as "Expression changed".
+        separator = " " if len(message.splitlines()) == 1 else "\n"
+
+        return f"Expression {expression} changed:{separator}{message}"
 
     @report
     @source_context
@@ -428,10 +487,31 @@ class UdbMcpGateway:
             # Check we really got to the function we intended.
             assert gdb.selected_frame().name() == target_fn
 
+            # Are C++ exceptions a potential consideration?
+            #
+            # If we cannot find the exception-handling state then either we're not in a C++ program
+            # at all (in which case we don't handle exceptions) or we're lacking the relevant debug
+            # information (in which case, for now, we'll just keep on trucking without it).
+            cpp_exceptions = cpp_exception_state_present()
+
+            # Get the number of uncaught exceptions before running the function.
+            uncaught_exceptions_before = cpp_get_uncaught_exceptions() if cpp_exceptions else 0
+
             # We're at the start of the target function, now we need to get to the end.
-            cxa_throw_bp = gdb.Breakpoint("__cxa_throw")
             self.udb.execution.finish()
-            if cxa_throw_bp.hit_count:
+
+            if cpp_exceptions and cpp_get_uncaught_exceptions() > uncaught_exceptions_before:
+                # There was an uncaught exception during this function's execution - we should
+                # rewind to it and bail out.
+
+                # Rewind to the throw.
+                cxa_throw_bp = gdb.Breakpoint("__cxa_throw")
+                self.udb.execution.reverse_cont()
+                assert cxa_throw_bp.hit_count == 1, (
+                    f"Expected to see cxa_throw_bp hit once while rewinding to an uncaught "
+                    f"exception but instead saw {cxa_throw_bp.hit_count=}."
+                )
+
                 # Get back out of __cxa_throw and (hopefully) into the code that threw.
                 self.udb.execution.reverse_finish(cmd="reverse-finish")
                 # Bail out early here - the rest of the function wasn't run and there's no return to
@@ -617,6 +697,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        udb.signals_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         run_server(gateway, args.port)
@@ -704,6 +785,7 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         gdbutils.temporary_parameter("backtrace past-main", True),
         udb.replay_standard_streams.temporary_set(False),
         gdbutils.breakpoints_suspended(),
+        udb.signals_suspended(),
         unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
     ):
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
