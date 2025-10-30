@@ -93,10 +93,6 @@ source lines:
 This works even when the memory location was modified a long time ago or in a
 different function.
 
-When `last` returns it specifies a "Was" value, which is what you were
-investigating.  "Now" is the previous value, which should be ignored or used
-for a new debugging hypothesis.
-
 `last` will only work for values that are currently in scope.  If a value is not
 currently in scope then you need to navigate backwards in time until it is.  Using
 `reverse_step`, `reverse_next` and `reverse_finish` can help you work
