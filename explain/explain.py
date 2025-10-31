@@ -227,7 +227,11 @@ def cpp_get_uncaught_exceptions():
     """
     Return the current number of uncaught exceptions on the current thread.
     """
-    return int(gdb.parse_and_eval("__cxa_get_globals()->uncaught_exceptions"))
+    try:
+        return int(gdb.parse_and_eval("__cxa_get_globals()->uncaught_exceptions"))
+    except gdb.error:
+        # Fall back to alternate spelling which has also been observed.
+        return int(gdb.parse_and_eval("__cxa_get_globals()->uncaughtExceptions"))
 
 
 def cpp_exception_state_present():
