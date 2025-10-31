@@ -223,7 +223,7 @@ def revert_time_on_failure(
     return wrapped
 
 
-def cpp_get_uncaught_exceptions():
+def cpp_get_uncaught_exceptions() -> int:
     """
     Return the current number of uncaught exceptions on the current thread.
     """
@@ -234,7 +234,7 @@ def cpp_get_uncaught_exceptions():
         return int(gdb.parse_and_eval("__cxa_get_globals()->uncaughtExceptions"))
 
 
-def cpp_exception_state_present():
+def cpp_exception_state_present() -> bool:
     """
     Do we have access to libstdc++ exception handling state in this program?
     """
