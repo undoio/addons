@@ -250,6 +250,36 @@ def cpp_exception_state_present() -> bool:
         return True
 
 
+def gtest_libraries_present() -> bool:
+    """
+    Is this program linked against gtest libraries?
+    """
+    obj_paths = (Path(o.filename) for o in gdb.objfiles() if o.filename is not None)
+    return any(o.name.startswith("libgtest") for o in obj_paths)
+
+
+class GTestNotAvailable(Exception):
+    """
+    Raised by GTest-specific tools if the Google Test libraries are not present.
+    """
+
+    def __init__(self):
+        super().__init__("Tool unavailable: This program was not run with gtest.")
+
+
+class GTestAnnotationsNotAvailable(Exception):
+    """
+    Raised by GTest-specific tools if our Google Test annotations are not found.
+    """
+
+    def __init__(self):
+        super().__init__(
+            "Tool unavailable: Did not find gtest annotations, which are required to navigate "
+            "Google Test recordings. Maybe the program was built without the "
+            "Undo's `undo_gtest_annotation.h` addon?"
+        )
+
+
 class UdbMcpGateway:
     """
     Plumbing class to expose selected UDB functionality as a set of tools to an MCP server.
@@ -645,6 +675,55 @@ class UdbMcpGateway:
         Use this to investigate further from an interesting point in time.
         """
         self.udb.bookmarks.goto(name)
+
+    @report
+    @chain_of_thought
+    def tool_gtest_get_tests(self) -> list[tuple[str, str]]:
+        """
+        Retrieve a list of GTest tests captured in this recording, along with their results.
+
+        Full test names are returned in the form:
+
+           <test suite name>.<test name>/run<run number>
+
+        Each instance of a test is assigned a unique run number. Run numbers don't have meaning
+        beyond being a unique suffix.
+
+        Returns a list of (<full test name>, <result>) tuples.
+        """
+        if not gtest_libraries_present():
+            raise GTestNotAvailable()
+
+        results = list(self.udb.annotations.get("", "u-test-result"))
+        if not results:
+            raise GTestAnnotationsNotAvailable()
+
+        return [(r.name, r.get_content_as_printable_text()) for r in results]
+
+    @report
+    @source_context
+    @chain_of_thought
+    def tool_gtest_goto_test(self, name) -> str:
+        """
+        Move to the end of the specified Gtest test case.
+        """
+        if not gtest_libraries_present():
+            raise GTestNotAvailable()
+
+        if not list(self.udb.annotations.get("", "u-test-result")):
+            raise GTestAnnotationsNotAvailable()
+
+        results = list(self.udb.annotations.get(name, "u-test-result"))
+        if len(results) != 1:
+            raise Exception("Must specify a unique, existing test identifier.")
+
+        annotation = results[0]
+        self.udb.time.goto(annotation.bbcount)
+
+        test_name, _ = annotation.name.split("/run")
+        target_fn = test_name.replace(".", "_") + "_Test::TestBody"
+
+        return self._reverse_into_target_function(target_fn)
 
 
 command.register_prefix(
