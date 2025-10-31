@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "undo",
+  "version": "1.0.0",
+  "description": "Claude Code plugins for UDB and debugging workflows",
+  "owner": {
+    "name": "Undo",
+    "email": "support@undo.io"
+  },
+  "plugins": [
+    {
+      "name": "undo",
+      "description": "Debug and analyze Undo recordings using AI-powered queries",
+      "source": "./explain/claude_code_plugin",
+      "category": "development",
+      "version": "1.0.0",
+      "author": {
+        "name": "Undo",
+        "email": "support@undo.io"
+      }
+    }
+  ]
+}

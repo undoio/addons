@@ -1,0 +1,16 @@
+{
+  "name": "undo",
+  "version": "0.1.0",
+  "description": "Debug and analyze Undo recordings using AI-powered queries",
+  "author": {
+    "name": "Undo",
+    "email": "support@undo.io"
+  },
+  "homepage": "https://github.com/undoio/addons/tree/master/explain",
+  "mcpServers": {
+    "undo-debugger": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
+      "args": []
+    }
+  }
+}

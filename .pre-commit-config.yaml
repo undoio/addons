@@ -38,6 +38,9 @@ repos:
           - --follow-imports=silent
           - --config-file=_linters/mypy.ini
         additional_dependencies:
-          - rich
-          - uvicorn
           - mcp
+          - requests
+          - rich
+          - types-pexpect
+          - types-requests
+          - uvicorn
