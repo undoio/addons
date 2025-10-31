@@ -355,9 +355,9 @@ class UdbMcpGateway:
 
         message = result_forwards.output
 
-        if m := re.search(r".*Now =.*", message):
+        if m := re.search(r".*Now = (.*)", message):
             # If we found a value change, extract just the "Now =" part of the message.
-            message = m[0]
+            message = f"has just been assigned value {m[1]}"
 
         # Put short messages on the same line as "Expression changed".
         separator = " " if len(message.splitlines()) == 1 else "\n"
