@@ -441,39 +441,17 @@ class UdbMcpGateway:
             orig_frame.select()
             raise
 
-    @report
-    @source_context
-    @revert_time_on_failure
-    @chain_of_thought
-    def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
+    def _reverse_into_target_function(self, target_fn: str) -> str:
         """
-        Reverse into a function call on the current line of the program.
+        Reverse from the current line into the previous call of the target function in this thread.
 
-        The current line must contain a function call.
+        This is to be used in the implementation of other tools that need to step into a function.
 
         Params:
-        target_fn: the function you want to step into
+        target_fn: the function to reverse into.
+
+        Returns: A string describing either the return value or the reason for an early stop.
         """
-        # LLMs prefer to step backwards into a function on the current line,
-        # rather than reverse up to that line and then step in.
-        #
-        # Also, it's possible that there are multiple functions to step into on
-        # a given line (either because the calls are nested or because there
-        # are multiple in sequence).
-        #
-        # To handle these cases, we ask the LLM what function it wants, then:
-        #  * Step forward past the current line.
-        #  * Set a breakpoint on the start of the target function.
-        #  * Run back to it.
-        #  * Use "finish" to get out (grabbing the return value as we go).
-        #  * Use "reverse-step" to get back into the end of the function.
-
-        # Step to next line.
-        with gdbio.CollectOutput() as collector:
-            self.udb.execution.next()
-        if LOG_LEVEL == "DEBUG":
-            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
-
         # Now try to step back into the correct function.
         with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
             # Create a breakpoint on the start of the target function.
@@ -550,9 +528,46 @@ class UdbMcpGateway:
                 ), "Unexpectedly reached the start of the target function."
 
         if LOG_LEVEL == "DEBUG":
-            print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
+            print(f"_reverse_into_target_function internal messages:\n{collector.output}")
 
         return f"{target_fn} return value: {return_value}"
+
+    @report
+    @source_context
+    @revert_time_on_failure
+    @chain_of_thought
+    def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
+        """
+        Reverse into a function call on the current line of the program.
+
+        The current line must contain a function call.
+
+        Params:
+        target_fn: the function you want to step into
+
+        Returns: A string describing either the return value or the reason for an early stop.
+        """
+        # LLMs prefer to step backwards into a function on the current line,
+        # rather than reverse up to that line and then step in.
+        #
+        # Also, it's possible that there are multiple functions to step into on
+        # a given line (either because the calls are nested or because there
+        # are multiple in sequence).
+        #
+        # To handle these cases, we ask the LLM what function it wants, then:
+        #  * Step forward past the current line.
+        #  * Set a breakpoint on the start of the target function.
+        #  * Run back to it.
+        #  * Use "finish" to get out (grabbing the return value as we go).
+        #  * Use "reverse-step" to get back into the end of the function.
+
+        # Step to next line.
+        with gdbio.CollectOutput() as collector:
+            self.udb.execution.next()
+        if LOG_LEVEL == "DEBUG":
+            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
+
+        return self._reverse_into_target_function(target_fn)
 
     @report
     @chain_of_thought
