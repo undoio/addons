@@ -227,11 +227,29 @@ def cpp_get_uncaught_exceptions() -> int:
     """
     Return the current number of uncaught exceptions on the current thread.
     """
-    try:
-        return int(gdb.parse_and_eval("__cxa_get_globals()->uncaught_exceptions"))
-    except gdb.error:
-        # Fall back to alternate spelling which has also been observed.
-        return int(gdb.parse_and_eval("__cxa_get_globals()->uncaughtExceptions"))
+    # Get a pointer to the base of the C++ runtime's per-thread globals.
+    cxa_globals = gdb.parse_and_eval("(char *)__cxa_get_globals()")
+
+    # The globals structure contains a pointer, followed by an unsigned int that stores the current
+    # count of uncaught exceptions.
+    #
+    # See https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html#cxx-data for more details.
+    #
+    # Mark saw the naming for the "uncaughtExceptions" field appear to vary but has not been able to
+    # reproduce this. However, the names are not always available at all if debug symbols are not
+    # present.
+    #
+    # Since this is part of the ABI we can calculate the address to look up the current uncaught
+    # exception count, rather than rely on symbols.
+
+    void_ptr_type = gdb.lookup_type("void").pointer()
+    unsigned_int_type = gdb.lookup_type("unsigned int")
+
+    # The globals structure contains pointer followed by the unsigned int we are looking for. We can
+    # calculate a pointer to that unsigned int member.
+    uncaught_ptr = (cxa_globals + void_ptr_type.sizeof).cast(unsigned_int_type.pointer())
+
+    return int(uncaught_ptr.dereference())
 
 
 def cpp_exception_state_present() -> bool:
