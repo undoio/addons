@@ -105,13 +105,11 @@ class CopilotCLIAgent(BaseAgent):
             prompt = question
 
         allowed_tools = ["UDB_Server", "shell(grep)", "shell(find)", "shell(cat)", "shell(xargs)"]
-        env_changes = {
+        env = {
+            **os.environ,
             "XDG_CONFIG_HOME": str(self._tempdir),
             "XDG_STATE_HOME": str(self._tempdir),
         }
-        if runtime_dir := os.environ.get("XDG_RUNTIME_DIR"):
-            # Pass through runtime state so it has auth access.
-            env_changes["XDG_RUNTIME_DIR"] = runtime_dir
 
         try:
             copilot = await asyncio.create_subprocess_exec(
@@ -127,7 +125,7 @@ class CopilotCLIAgent(BaseAgent):
                 "claude-sonnet-4.5",
                 "-p",
                 prompt,
-                env=os.environ.copy().update(env_changes),
+                env=env,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
