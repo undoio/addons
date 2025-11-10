@@ -3,6 +3,7 @@ Copilot CLI agent implementation.
 """
 
 import asyncio
+import contextlib
 import itertools
 import json
 import os
@@ -10,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from src.udbpy.fileutil import mkdtemp
+from src.udbpy.fileutil import mkdtemp, mkstemp
 
 from .agents import BaseAgent
 from .assets import FRAMING_PROMPT, SYSTEM_PROMPT
@@ -78,22 +79,22 @@ class CopilotCLIAgent(BaseAgent):
         if self.log_level == "DEBUG":
             print(f"Connecting Copilot CLI to MCP server on port {port}")
 
-        copilot_config = {
+        mcp_config = {
             "mcpServers": {
                 "UDB_Server": {"type": "sse", "url": f"http://localhost:{port}/sse", "tools": ["*"]}
             }
         }
 
+        # We always need to re-create the MCP config as the dynamically allocated port may change
+        # between invocations of the tool.
+        mcp_config_fd, mcp_config_path = mkstemp(prefix="mcp_config", suffix=".json")
+        with contextlib.closing(os.fdopen(mcp_config_fd, "w")) as mcp_config_file:
+            json.dump(mcp_config, mcp_config_file)
+
         # We run Copilot CLI with a temporary "home directory" so that we can apply a temporary MCP
         # configuration and rely on "--resume" finding our previous session automatically.
         if not self._tempdir:
             self._tempdir = mkdtemp(prefix="udb_explain_copilot_home")
-
-        # We always need to re-create the MCP config as the dynamically allocated port may change
-        # between invocations of the tool.
-        config_dir = self._tempdir / ".copilot"
-        config_dir.mkdir(exist_ok=True)
-        (config_dir / "mcp-config.json").write_text(json.dumps(copilot_config) + "\n")
 
         result = ""
         copilot = None
@@ -105,15 +106,12 @@ class CopilotCLIAgent(BaseAgent):
             prompt = question
 
         allowed_tools = ["UDB_Server", "shell(grep)", "shell(find)", "shell(cat)", "shell(xargs)"]
-        env = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self._tempdir),
-            "XDG_STATE_HOME": str(self._tempdir),
-        }
 
         try:
             copilot = await asyncio.create_subprocess_exec(
                 str(self.agent_bin),
+                "--additional-mcp-config",
+                f"@{mcp_config_path}",
                 # We can resume unambiguously without specifying a session ID because we're using a
                 # temporary home directory for the state generated in this session.
                 *(["--resume"] if self._resume else []),
@@ -125,7 +123,11 @@ class CopilotCLIAgent(BaseAgent):
                 "claude-sonnet-4.5",
                 "-p",
                 prompt,
-                env=env,
+                env={
+                    **os.environ,
+                    # Ensure state files are stored in our temporary home, so that resuming works.
+                    "XDG_STATE_HOME": str(self._tempdir),
+                },
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
