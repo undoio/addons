@@ -20,15 +20,19 @@ class BacktraceWithTime(gdb.Command):
         # hitting anything we shouldn't.
         with udb.time.auto_reverting(), debugger_utils.breakpoints_suspended():
             # Get the whole backtrace.
-            backtrace = debugger_utils.execute_to_string("where")
+            backtrace = debugger_utils.execute_to_string("where", styled=True)
             backtrace = backtrace.splitlines()
+
+            # The bbcount now is the largest that will be printed, so
+            # it can define the width of the column
+            bbcount_width = len(str(udb.time.get().bbcount))
 
             exception_hit = False
             for line in backtrace:
                 if not exception_hit:
                     # Print time at start of each backtrace line.
                     time = udb.time.get()
-                    print("[{}]\t{}".format(str(time.bbcount), line))
+                    print(f"[{time.bbcount:{bbcount_width}}] {line}")
                     try:
                         # Go back to previous frame
                         debugger_utils.execute_to_string("rf")
