@@ -53,7 +53,7 @@ class ClaudeAgent(BaseAgent):
         async for line in stdout:
             msg = json.loads(line)
             if self.log_level == "DEBUG":
-                print("Message:", msg)
+                print("Claude:", msg)
 
             if msg.get("type") == "result":
                 # Fetch the session ID so that we can resume our conversation next time.

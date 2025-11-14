@@ -33,7 +33,7 @@ class CodexAgent(BaseAgent):
         async for line in stdout:
             line_data = json.loads(line)
             if self.log_level == "DEBUG":
-                print("Message:", line_data)
+                print("Codex:", line_data)
 
             match line_data:
                 case {"type": "turn.completed"}:

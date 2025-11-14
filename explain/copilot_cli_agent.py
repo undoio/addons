@@ -44,7 +44,7 @@ class CopilotCLIAgent(BaseAgent):
             line = line_bytes.decode("utf-8").rstrip()
 
             if self.log_level == "DEBUG":
-                print("Line:", line)
+                print("Copilot:", line)
 
             if "<thinking>" in line:
                 assert not thinking and not answering

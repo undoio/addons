@@ -42,7 +42,7 @@ class AmpAgent(BaseAgent):
             line = line_bytes.decode("utf-8").rstrip()
 
             if self.log_level == "DEBUG":
-                print("Line:", line)
+                print("Amp:", line)
 
             match line:
                 case "<thinking>":
