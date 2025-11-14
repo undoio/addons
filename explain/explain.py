@@ -18,7 +18,7 @@ import random
 import re
 import socket
 import unittest.mock
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, Concatenate, Literal, ParamSpec, TypeAlias, TypeVar, cast
 
@@ -60,6 +60,20 @@ event_loop = None
 
 agent: BaseAgent | None = None
 """Agent instance for the current session."""
+
+
+@contextlib.contextmanager
+def temporary_gdb_settings(udb: udb_base.Udb) -> Iterator[None]:
+    with (
+        gdbutils.temporary_parameter("confirm", False),
+        gdbutils.temporary_parameter("pagination", False),
+        gdbutils.temporary_parameter("backtrace past-main", True),
+        gdbutils.breakpoints_suspended(),
+        udb.signals_suspended(),
+        udb.replay_standard_streams.temporary_set(False),
+        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
+    ):
+        yield
 
 
 def report(fn: Callable[P, T]) -> Callable[P, T | str]:
@@ -693,14 +707,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
     Start an MCP server for this UDB instance.
     """
     gateway = UdbMcpGateway(udb)
-    with (
-        gdbutils.temporary_parameter("pagination", False),
-        gdbutils.temporary_parameter("backtrace past-main", True),
-        udb.replay_standard_streams.temporary_set(False),
-        gdbutils.breakpoints_suspended(),
-        udb.signals_suspended(),
-        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
-    ):
+    with temporary_gdb_settings(udb):
         run_server(gateway, args.port)
 
 
@@ -780,15 +787,7 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         event_loop = asyncio.new_event_loop()
 
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
-    with (
-        gdbutils.temporary_parameter("pagination", False),
-        gdbutils.temporary_parameter("confirm", False),
-        gdbutils.temporary_parameter("backtrace past-main", True),
-        udb.replay_standard_streams.temporary_set(False),
-        gdbutils.breakpoints_suspended(),
-        udb.signals_suspended(),
-        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
-    ):
+    with temporary_gdb_settings(udb):
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
         print_explanation(explanation)
@@ -842,13 +841,7 @@ def uinternal__mcp__invoke_tool(
 
     tool_kwargs = json.loads(tool_args_json)
     assert isinstance(tool_kwargs, dict), "Tool arguments must be a JSON object"
-    with (
-        gdbutils.temporary_parameter("pagination", False),
-        gdbutils.temporary_parameter("backtrace past-main", True),
-        udb.replay_standard_streams.temporary_set(False),
-        gdbutils.breakpoints_suspended(),
-        unittest.mock.patch.object(udb, "_volatile_mode_explained", True),
-    ):
+    with temporary_gdb_settings(udb):
         result = fn(**tool_kwargs)
     print(f"{start_delim}\n{json.dumps(result)}\n{end_delim}")
 
