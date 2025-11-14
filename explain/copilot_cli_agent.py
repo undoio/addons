@@ -123,6 +123,7 @@ class CopilotCLIAgent(BaseAgent):
                 "claude-sonnet-4.5",
                 "-p",
                 prompt,
+                *self.additional_flags,
                 env={
                     **os.environ,
                     # Ensure state files are stored in our temporary home, so that resuming works.

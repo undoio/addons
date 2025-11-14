@@ -126,6 +126,7 @@ class AmpAgent(BaseAgent):
                 "threads",
                 "continue",
                 self._thread_id,
+                *self.additional_flags,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

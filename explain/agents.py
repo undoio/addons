@@ -5,9 +5,10 @@ Agent registry system for AI coding assistants.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -18,6 +19,7 @@ class BaseAgent(ABC):
 
     agent_bin: Path
     log_level: str = "CRITICAL"
+    additional_flags: list[str] = field(default_factory=list)
 
     name: ClassVar[str]
     program_name: ClassVar[str]
@@ -75,7 +77,7 @@ class AgentRegistry:
 
     @classmethod
     def _create_if_available(
-        cls, agent_class: Any, log_level: str = "CRITICAL"
+        cls, agent_class: Any, log_level: str, additional_flags: list[str]
     ) -> BaseAgent | None:
         """
         Create an instance of the agent if it's available on the system.
@@ -83,13 +85,14 @@ class AgentRegistry:
         Args:
             agent_class: The agent class (subclass of BaseAgent) to instantiate
             log_level: Log level to pass to the agent
+            additional_flags: Additional command-line flags to pass to the agent
 
         Returns:
             Agent instance if available, None otherwise
         """
         binary = agent_class.find_binary()
         if binary:
-            return agent_class(binary, log_level=log_level)
+            return agent_class(binary, log_level=log_level, additional_flags=additional_flags)
         return None
 
     @classmethod
@@ -109,10 +112,17 @@ class AgentRegistry:
         Raises:
             Exception: If no agents are available or preferred agent is not found
         """
+        # Parse additional flags from environment variable
+        additional_flags = []
+        if flags_str := os.environ.get("EXPLAIN_AGENT_FLAGS"):
+            additional_flags = shlex.split(flags_str)
+
         # Get instances of all available agents on the system
         available = {}
         for name, agent_class in cls.agents.items():
-            instance = cls._create_if_available(agent_class, log_level=log_level)
+            instance = cls._create_if_available(
+                agent_class, log_level=log_level, additional_flags=additional_flags
+            )
             if instance:
                 available[name] = instance
 

@@ -129,6 +129,7 @@ class ClaudeAgent(BaseAgent):
                 question,
                 "--system-prompt",
                 SYSTEM_PROMPT,
+                *self.additional_flags,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
