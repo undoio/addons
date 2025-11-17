@@ -257,14 +257,36 @@ def revert_time_on_failure(
     return wrapped
 
 
-def cpp_get_uncaught_exceptions():
+def cpp_get_uncaught_exceptions() -> int:
     """
     Return the current number of uncaught exceptions on the current thread.
     """
-    return int(gdb.parse_and_eval("__cxa_get_globals()->uncaught_exceptions"))
+    # Get a pointer to the base of the C++ runtime's per-thread globals.
+    cxa_globals = gdb.parse_and_eval("(char *)__cxa_get_globals()")
+
+    # The globals structure contains a pointer, followed by an unsigned int that stores the current
+    # count of uncaught exceptions.
+    #
+    # See https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html#cxx-data for more details.
+    #
+    # Mark saw the naming for the "uncaughtExceptions" field appear to vary but has not been able to
+    # reproduce this. However, the names are not always available at all if debug symbols are not
+    # present.
+    #
+    # Since this is part of the ABI we can calculate the address to look up the current uncaught
+    # exception count, rather than rely on symbols.
+
+    void_ptr_type = gdb.lookup_type("void").pointer()
+    unsigned_int_type = gdb.lookup_type("unsigned int")
+
+    # The globals structure contains pointer followed by the unsigned int we are looking for. We can
+    # calculate a pointer to that unsigned int member.
+    uncaught_ptr = (cxa_globals + void_ptr_type.sizeof).cast(unsigned_int_type.pointer())
+
+    return int(uncaught_ptr.dereference())
 
 
-def cpp_exception_state_present():
+def cpp_exception_state_present() -> bool:
     """
     Do we have access to libstdc++ exception handling state in this program?
     """
@@ -278,6 +300,36 @@ def cpp_exception_state_present():
         raise
     else:
         return True
+
+
+def gtest_libraries_present() -> bool:
+    """
+    Is this program linked against gtest libraries?
+    """
+    obj_paths = (Path(o.filename) for o in gdb.objfiles() if o.filename is not None)
+    return any(o.name.startswith("libgtest") for o in obj_paths)
+
+
+class GTestNotAvailable(Exception):
+    """
+    Raised by GTest-specific tools if the Google Test libraries are not present.
+    """
+
+    def __init__(self):
+        super().__init__("Tool unavailable: This program was not run with gtest.")
+
+
+class GTestAnnotationsNotAvailable(Exception):
+    """
+    Raised by GTest-specific tools if our Google Test annotations are not found.
+    """
+
+    def __init__(self):
+        super().__init__(
+            "Tool unavailable: Did not find gtest annotations, which are required to navigate "
+            "Google Test recordings. Maybe the program was built without the "
+            "Undo's `undo_gtest_annotation.h` addon?"
+        )
 
 
 class UdbMcpGateway:
@@ -471,39 +523,17 @@ class UdbMcpGateway:
             orig_frame.select()
             raise
 
-    @report
-    @source_context
-    @revert_time_on_failure
-    @chain_of_thought
-    def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
+    def _reverse_into_target_function(self, target_fn: str) -> str:
         """
-        Reverse into a function call on the current line of the program.
+        Reverse from the current line into the previous call of the target function in this thread.
 
-        The current line must contain a function call.
+        This is to be used in the implementation of other tools that need to step into a function.
 
         Params:
-        target_fn: the function you want to step into
+        target_fn: the function to reverse into.
+
+        Returns: A string describing either the return value or the reason for an early stop.
         """
-        # LLMs prefer to step backwards into a function on the current line,
-        # rather than reverse up to that line and then step in.
-        #
-        # Also, it's possible that there are multiple functions to step into on
-        # a given line (either because the calls are nested or because there
-        # are multiple in sequence).
-        #
-        # To handle these cases, we ask the LLM what function it wants, then:
-        #  * Step forward past the current line.
-        #  * Set a breakpoint on the start of the target function.
-        #  * Run back to it.
-        #  * Use "finish" to get out (grabbing the return value as we go).
-        #  * Use "reverse-step" to get back into the end of the function.
-
-        # Step to next line.
-        with gdbio.CollectOutput() as collector:
-            self.udb.execution.next()
-        if LOG_LEVEL == "DEBUG":
-            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
-
         # Now try to step back into the correct function.
         with gdbutils.temporary_breakpoints(), gdbio.CollectOutput() as collector:
             # Create a breakpoint on the start of the target function.
@@ -580,9 +610,46 @@ class UdbMcpGateway:
                 ), "Unexpectedly reached the start of the target function."
 
         if LOG_LEVEL == "DEBUG":
-            print(f"reverse_step_into_current_line internal messages:\n{collector.output}")
+            print(f"_reverse_into_target_function internal messages:\n{collector.output}")
 
         return f"{target_fn} return value: {return_value}"
+
+    @report
+    @source_context
+    @revert_time_on_failure
+    @chain_of_thought
+    def tool_reverse_step_into_current_line(self, target_fn: str) -> str:
+        """
+        Reverse into a function call on the current line of the program.
+
+        The current line must contain a function call.
+
+        Params:
+        target_fn: the function you want to step into
+
+        Returns: A string describing either the return value or the reason for an early stop.
+        """
+        # LLMs prefer to step backwards into a function on the current line,
+        # rather than reverse up to that line and then step in.
+        #
+        # Also, it's possible that there are multiple functions to step into on
+        # a given line (either because the calls are nested or because there
+        # are multiple in sequence).
+        #
+        # To handle these cases, we ask the LLM what function it wants, then:
+        #  * Step forward past the current line.
+        #  * Set a breakpoint on the start of the target function.
+        #  * Run back to it.
+        #  * Use "finish" to get out (grabbing the return value as we go).
+        #  * Use "reverse-step" to get back into the end of the function.
+
+        # Step to next line.
+        with gdbio.CollectOutput() as collector:
+            self.udb.execution.next()
+        if LOG_LEVEL == "DEBUG":
+            print(f"reverse_step_into_current_line internal step to next line: {collector.output}")
+
+        return self._reverse_into_target_function(target_fn)
 
     @report
     @chain_of_thought
@@ -660,6 +727,55 @@ class UdbMcpGateway:
         Use this to investigate further from an interesting point in time.
         """
         self.udb.bookmarks.goto(name)
+
+    @report
+    @chain_of_thought
+    def tool_gtest_get_tests(self) -> list[tuple[str, str]]:
+        """
+        Retrieve a list of GTest tests captured in this recording, along with their results.
+
+        Full test names are returned in the form:
+
+           <test suite name>.<test name>/run<run number>
+
+        Each instance of a test is assigned a unique run number. Run numbers don't have meaning
+        beyond being a unique suffix.
+
+        Returns a list of (<full test name>, <result>) tuples.
+        """
+        if not gtest_libraries_present():
+            raise GTestNotAvailable()
+
+        results = list(self.udb.annotations.get("", "u-test-result"))
+        if not results:
+            raise GTestAnnotationsNotAvailable()
+
+        return [(r.name, r.get_content_as_printable_text()) for r in results]
+
+    @report
+    @source_context
+    @chain_of_thought
+    def tool_gtest_goto_test(self, name) -> str:
+        """
+        Move to the end of the specified Gtest test case.
+        """
+        if not gtest_libraries_present():
+            raise GTestNotAvailable()
+
+        if not list(self.udb.annotations.get("", "u-test-result")):
+            raise GTestAnnotationsNotAvailable()
+
+        results = list(self.udb.annotations.get(name, "u-test-result"))
+        if len(results) != 1:
+            raise Exception("Must specify a unique, existing test identifier.")
+
+        annotation = results[0]
+        self.udb.time.goto(annotation.bbcount)
+
+        test_name, _ = annotation.name.split("/run")
+        target_fn = test_name.replace(".", "_") + "_Test::TestBody"
+
+        return self._reverse_into_target_function(target_fn)
 
 
 command.register_prefix(

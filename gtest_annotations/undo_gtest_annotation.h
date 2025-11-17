@@ -24,7 +24,8 @@ public:
     {
         // Create an instance of an annotation context, and associate it
         // with this thread.
-        undoex_test_annotation_t *annotation = undoex_test_annotation_new(testInfo.name(), true);
+        std::string full_name = std::string(testInfo.test_suite_name()) + "." + testInfo.name();
+        undoex_test_annotation_t *annotation = undoex_test_annotation_new(full_name.c_str(), true);
         undoex_test_annotation_start(annotation);
 
         const std::thread::id thread_id = std::this_thread::get_id();
