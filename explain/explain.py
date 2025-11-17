@@ -14,13 +14,14 @@ import contextlib
 import functools
 import inspect
 import json
+import os
 import random
 import re
 import socket
 import unittest.mock
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Concatenate, Literal, ParamSpec, TypeAlias, TypeVar, cast
+from typing import Any, Concatenate, Literal, ParamSpec, TypeAlias, TypeVar, cast, get_args
 
 import gdb
 import uvicorn.server
@@ -43,8 +44,26 @@ from .output_utils import console_whizz, print_agent, print_explanation, print_t
 uvicorn.server.HANDLED_SIGNALS = ()  # type: ignore[assignment]
 
 # Switch the debug level to get more context if the MCP server is misbehaving.
-LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "CRITICAL"
+LogLevel: TypeAlias = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+def _validate_log_level(level: str) -> LogLevel:
+    """Validate and cast a string to a valid log level."""
+    level = level.upper()
+    valid_levels = get_args(LogLevel)
+    if level not in valid_levels:
+        raise ValueError(
+            f"Invalid log level: {level!r}. Valid values are: {', '.join(valid_levels)}"
+        )
+    return cast(LogLevel, level)
+
+
+LOG_LEVEL: LogLevel = "CRITICAL"  # pylint: disable=invalid-name
 # LOG_LEVEL="DEBUG"
+
+# Override from environment variable if set
+if _env_log_level := os.environ.get("EXPLAIN_LOG_LEVEL"):
+    LOG_LEVEL = _validate_log_level(_env_log_level)
 
 
 P = ParamSpec("P")

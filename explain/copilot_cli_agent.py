@@ -44,7 +44,7 @@ class CopilotCLIAgent(BaseAgent):
             line = line_bytes.decode("utf-8").rstrip()
 
             if self.log_level == "DEBUG":
-                print("Line:", line)
+                print("Copilot:", line)
 
             if "<thinking>" in line:
                 assert not thinking and not answering
@@ -123,6 +123,7 @@ class CopilotCLIAgent(BaseAgent):
                 "claude-sonnet-4.5",
                 "-p",
                 prompt,
+                *self.additional_flags,
                 env={
                     **os.environ,
                     # Ensure state files are stored in our temporary home, so that resuming works.
