@@ -755,7 +755,7 @@ class UdbMcpGateway:
     @report
     @source_context
     @chain_of_thought
-    def tool_gtest_goto_test(self, name) -> str:
+    def tool_gtest_goto_test(self, name: str) -> str:
         """
         Move to the end of the specified Gtest test case.
         """
