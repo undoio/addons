@@ -83,7 +83,12 @@ class RecordingParser:
 
             return pid, ppid, start_time
 
-        except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, ValueError) as e:
+        except subprocess.CalledProcessError as e:
+            print(f"Error processing {recording_file}: {e}", file=sys.stderr)
+            if e.stderr:
+                print(f"  stderr: {e.stderr.strip()}", file=sys.stderr)
+            return None, None, 0.0
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"Error processing {recording_file}: {e}", file=sys.stderr)
             return None, None, 0.0
 
@@ -548,5 +553,5 @@ def main():
 if HAS_GDB:
     ProcessTreeCommand()
 # When run as a standalone script
-if __name__ == "__main__":
+elif __name__ == "__main__":
     sys.exit(main())
