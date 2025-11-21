@@ -31,6 +31,9 @@ A demo of how to record an application in a Kubernetes pod using live-record.
 [**Load Debug Symbols**](load_debug_symbols/README.md)
 Loads debug symbols by parsing the relevant section addresses.
 
+[**Process Tree**](process_tree/README.md)
+Visualizes process trees from .undo recording files showing parent-child relationships.
+
 [**Reconstruct file**](reconstruct_file/README.md)
 Reconstructs the content of a file by analysing reads on the execution history
 of a debugged program or LiveRecorder recording.
