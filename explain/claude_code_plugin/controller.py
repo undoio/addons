@@ -187,6 +187,8 @@ class UdbHarness:
                 "set debuginfod enabled on",
                 "--init-eval-command",
                 "set style enabled off",
+                "--sessions",
+                "no",
                 "--init-eval",
                 f"set prompt {self._prompt}",
                 "--init-eval-command",
