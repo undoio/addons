@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
+
 try:
     import gdb
 
@@ -98,9 +99,7 @@ class RecordingParser:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
 
-    def _get_process_ids(
-        self, recording_file: Path
-    ) -> Tuple[Optional[int], Optional[int]]:
+    def _get_process_ids(self, recording_file: Path) -> Tuple[Optional[int], Optional[int]]:
         """Get PID and PPID from recording file."""
         data = self._run_recording_json(recording_file, "d")
         pid = data["debuggee"]["state_load_rchild_pid"]
@@ -139,9 +138,7 @@ class ProcessTree:
 
         # Find root process (one with no parent in our dataset)
         roots = [
-            p
-            for p in self.processes.values()
-            if p.ppid is None or p.ppid not in self.processes
+            p for p in self.processes.values() if p.ppid is None or p.ppid not in self.processes
         ]
 
         if len(roots) != 1:
@@ -417,9 +414,7 @@ class ProcessTreeVisualizer:
         self.ascii_renderer = ASCIIRenderer()
         self.svg_renderer = SVGRenderer()
 
-    def load_and_visualize(
-        self, recordings_dir: Path, output_svg: Optional[str] = None
-    ) -> None:
+    def load_and_visualize(self, recordings_dir: Path, output_svg: Optional[str] = None) -> None:
         """Load recordings and generate visualizations."""
         # Load all recordings
         tree = self._load_recordings(recordings_dir)
@@ -482,9 +477,7 @@ if HAS_GDB:
         def invoke(self, argument: str, _from_tty: bool) -> None:
             """Execute the process-tree command."""
             if not argument:
-                raise gdb.GdbError(
-                    "Usage: process-tree RECORDINGS_DIR [--output-svg FILE]"
-                )
+                raise gdb.GdbError("Usage: process-tree RECORDINGS_DIR [--output-svg FILE]")
 
             # Parse arguments
             args = shlex.split(argument)
@@ -526,9 +519,7 @@ def main():
         description="Visualize process trees from .undo recording files. "
         "By default, only ASCII output is shown."
     )
-    parser.add_argument(
-        "recordings_dir", help="Directory containing .undo recording files"
-    )
+    parser.add_argument("recordings_dir", help="Directory containing .undo recording files")
     parser.add_argument(
         "--output-svg", help="Output SVG file path (generates SVG in addition to ASCII)"
     )
