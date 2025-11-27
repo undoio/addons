@@ -8,16 +8,16 @@ Shows both ASCII tree output and SVG timeline diagrams.
 Can be used as a standalone script or as a GDB command.
 """
 
+import argparse
 import json
 import shlex
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
-import argparse
-import xml.etree.ElementTree as ET
 
 try:
     import gdb
@@ -115,7 +115,7 @@ class RecordingParser:
         try:
             return float(utc_start) + float(utc_start_ns) / 1_000_000_000
         except (ValueError, TypeError) as e:
-            raise ValueError(f"Invalid timestamp data in recording header: {e}")
+            raise ValueError(f"Invalid timestamp data in recording header: {e}") from e
 
 
 class ProcessTree:
@@ -305,7 +305,10 @@ class SVGRenderer:
         """
 
     def _draw_process_lines(
-        self, svg: ET.Element, processes: Iterable[Process], layout: Dict[int, LayoutInfo]
+        self,
+        svg: ET.Element,
+        processes: Iterable[Process],
+        layout: Dict[int, LayoutInfo],
     ) -> None:
         """Draw horizontal timeline lines for each process."""
         for process in processes:
@@ -315,37 +318,42 @@ class SVGRenderer:
             end_x = start_x + self.line_length
 
             # Main timeline
-            ET.SubElement(
+            line = ET.SubElement(
                 svg,
                 "line",
                 x1=str(start_x),
                 y1=str(y),
                 x2=str(end_x),
                 y2=str(y),
-                **{"class": "process-line"},
             )
+            line.set("class", "process-line")
 
             # PID label (above line)
-            ET.SubElement(
+            pid_label = ET.SubElement(
                 svg,
                 "text",
                 x=str(start_x - 90),
                 y=str(y - 10),
-                **{"class": "process-label"},
-            ).text = f"PID {process.pid}"
+            )
+            pid_label.set("class", "process-label")
+            pid_label.text = f"PID {process.pid}"
 
             # Filename label (below line)
             filename = Path(process.recording_file).name
-            ET.SubElement(
+            filename_label = ET.SubElement(
                 svg,
                 "text",
                 x=str(start_x + 20),
                 y=str(y + 20),
-                **{"class": "filename-label"},
-            ).text = filename
+            )
+            filename_label.set("class", "filename-label")
+            filename_label.text = filename
 
     def _draw_fork_connections(
-        self, svg: ET.Element, processes: Iterable[Process], layout: Dict[int, LayoutInfo]
+        self,
+        svg: ET.Element,
+        processes: Iterable[Process],
+        layout: Dict[int, LayoutInfo],
     ) -> None:
         """Draw fork connections between parent and child processes."""
         for process in processes:
@@ -362,35 +370,36 @@ class SVGRenderer:
                 child_y = layout[child_pid].y
 
                 # Fork label
-                ET.SubElement(
+                fork_label = ET.SubElement(
                     svg,
                     "text",
                     x=str(fork_x - 15),
                     y=str(parent_y - 10),
-                    **{"class": "fork-label"},
-                ).text = "fork()"
+                )
+                fork_label.set("class", "fork-label")
+                fork_label.text = "fork()"
 
                 # Vertical line down
-                ET.SubElement(
+                vertical_line = ET.SubElement(
                     svg,
                     "line",
                     x1=str(fork_x),
                     y1=str(parent_y),
                     x2=str(fork_x),
                     y2=str(child_y),
-                    **{"class": "fork-line"},
                 )
+                vertical_line.set("class", "fork-line")
 
                 # Horizontal line to child
-                ET.SubElement(
+                horizontal_line = ET.SubElement(
                     svg,
                     "line",
                     x1=str(fork_x),
                     y1=str(child_y),
                     x2=str(child_start_x),
                     y2=str(child_y),
-                    **{"class": "fork-line"},
                 )
+                horizontal_line.set("class", "fork-line")
 
     def _save_svg(self, svg: ET.Element, output_file: str) -> None:
         """Save SVG to file."""
@@ -438,7 +447,8 @@ class ProcessTreeVisualizer:
                 process = Process(pid, ppid, str(recording_file), start_time)
                 tree.add_process(process)
                 print(
-                    f"Loaded: PID {pid}, PPID {ppid}, Start: {start_time:.9f}, File: {recording_file.name}"
+                    f"Loaded: PID {pid}, PPID {ppid}, Start: {start_time:.9f}, "
+                    f"File: {recording_file.name}"
                 )
 
         tree.build_relationships()
@@ -466,10 +476,10 @@ if HAS_GDB:
             process-tree /path/to/recordings --output-svg tree.svg
         """
 
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__("process-tree", gdb.COMMAND_USER, gdb.COMPLETE_FILENAME)
 
-        def invoke(self, argument, from_tty):
+        def invoke(self, argument: str, _from_tty: bool) -> None:
             """Execute the process-tree command."""
             if not argument:
                 raise gdb.GdbError(
