@@ -58,7 +58,7 @@ def _validate_log_level(level: str) -> LogLevel:
     return cast(LogLevel, level)
 
 
-LOG_LEVEL: LogLevel = "CRITICAL"  # pylint: disable=invalid-name
+LOG_LEVEL: LogLevel = "CRITICAL"  # pylint: disable=invalid-name,useless-suppression
 # LOG_LEVEL="DEBUG"
 
 # Override from environment variable if set
