@@ -27,17 +27,26 @@ import gdb
 import uvicorn.server
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.prompts import Prompt
+from pydantic import BaseModel, ValidationError
+from rich.padding import Padding
 from src.udbpy import engine, event_info, ui
 from src.udbpy.gdb_extensions import command, command_args, gdbio, gdbutils, udb_base, udb_last
 
 # Agent modules are imported to trigger registration.
 from .agents import AgentRegistry, BaseAgent
 from .amp_agent import AmpAgent  # pylint: disable=unused-import
-from .assets import MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
+from .assets import FLOW_PROMPT, MCP_INSTRUCTIONS, SYSTEM_PROMPT, THINKING_MSGS
 from .claude_agent import ClaudeAgent  # # pylint: disable=unused-import
 from .codex_agent import CodexAgent  # pylint: disable=unused-import
 from .copilot_cli_agent import CopilotCLIAgent  # pylint: disable=unused-import
-from .output_utils import console_whizz, print_agent, print_explanation, print_tool_call
+from .output_utils import (
+    ExplainPanel,
+    console,
+    console_whizz,
+    print_agent,
+    print_explanation,
+    print_tool_call,
+)
 
 
 # Prevent uvicorn trying to handle signals that already have special GDB handlers.
@@ -926,6 +935,709 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
         explanation = event_loop.run_until_complete(explain_query(agent, gateway, why))
 
         print_explanation(explanation)
+
+
+# =============================================================================
+# Flow Command - Value Origin Tracking
+# =============================================================================
+
+
+class FlowCheckpoint(BaseModel):
+    """Checkpoint data for restoring flow position."""
+
+    bbcount: int
+    pc: int | None
+    function: str
+    expression: str
+    value: str
+
+
+class FlowLocation(BaseModel):
+    """Location information for a flow step."""
+
+    file: str
+    line: int
+    function: str
+    source_line: str
+
+
+class FlowAnalysis(BaseModel):
+    """Analysis of the current flow step."""
+
+    description: str
+    source_binary_match: bool
+    summary: str | None = None  # Short one-line summary (10-15 words max)
+
+
+class FlowNextStep(BaseModel):
+    """A suggested next step in flow tracking."""
+
+    id: int
+    action: Literal[
+        "last_value", "reverse_step_into_current_line", "reverse_finish", "reverse_next"
+    ]
+    reasoning: str
+    priority: Literal["high", "medium", "low"]
+    # Optional fields depending on action type
+    expression_to_track: str | None = None
+    target_fn: str | None = None
+
+
+class FlowResponse(BaseModel):
+    """Complete response from LLM flow analysis."""
+
+    checkpoint: FlowCheckpoint
+    location: FlowLocation
+    analysis: FlowAnalysis
+    next_steps: list[FlowNextStep]
+    should_continue: bool
+    stopping_reason: (
+        Literal[
+            "origin_found",
+            "step_limit_reached",
+            "ambiguous_flow",
+            "optimized_away",
+            "external_input",
+            "cannot_navigate",
+            "llm_error",
+        ]
+        | None
+    )
+
+
+def _gather_flow_context(udb: udb_base.Udb, expression: str) -> dict:
+    """
+    Gather complete debugging context at current location.
+
+    Returns dict with tracking info, location, source, disassembly, registers, locals, backtrace.
+    """
+    # Get current position
+    bookmarked = udb.time.get_bookmarked()
+    frame = gdb.selected_frame()
+    sal = frame.find_sal()
+
+    # Safe expression evaluation - check for inferior calls
+    value = "<unknown>"
+    call_count = 0
+
+    def _call_handler(_):
+        nonlocal call_count
+        call_count += 1
+
+    try:
+        with gdbutils.gdb_event_connected(gdb.events.inferior_call, _call_handler):
+            result = gdb.parse_and_eval(expression)
+        if call_count:
+            value = "<requires function call>"
+        else:
+            result.fetch_lazy()
+            value = str(result)
+    except gdb.error as e:
+        value = f"<error: {e}>"
+
+    # Build context
+    context: dict[str, Any] = {
+        "tracking": {
+            "expression": expression,
+            "current_value": value,
+        },
+        "location": {
+            "file": sal.symtab.fullname() if sal and sal.symtab else "<unknown>",
+            "line": sal.line if sal else 0,
+            "function": frame.name() or "<unknown>",
+            "bbcount": bookmarked.time.bbcount,
+            "pc": bookmarked.time.pc,
+        },
+        "source": "",
+        "disassembly": "",
+        "registers": "",
+        "locals": "",
+        "backtrace": "",
+    }
+
+    # Get source context
+    if sal and sal.symtab:
+        context["source"] = get_context(sal.symtab.fullname(), sal.line)
+
+    # Get disassembly
+    try:
+        context["disassembly"] = gdbutils.execute_to_string("disassemble")
+    except gdb.error:
+        context["disassembly"] = "<unavailable>"
+
+    # Get registers
+    try:
+        context["registers"] = gdbutils.execute_to_string("info registers")
+    except gdb.error:
+        context["registers"] = "<unavailable>"
+
+    # Get locals
+    try:
+        context["locals"] = gdbutils.execute_to_string("info locals")
+    except gdb.error:
+        context["locals"] = "<unavailable>"
+
+    # Get backtrace (limited to 5 frames)
+    try:
+        context["backtrace"] = gdbutils.execute_to_string("bt 5")
+    except gdb.error:
+        context["backtrace"] = "<unavailable>"
+
+    return context
+
+
+def _extract_json_from_response(text: str) -> str:
+    """Extract JSON from LLM response, handling markdown code blocks."""
+    # Try to extract from markdown code blocks
+    json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if json_match:
+        return json_match.group(1).strip()
+    # Otherwise return the text as-is (hopefully it's raw JSON)
+    return text.strip()
+
+
+def _build_flow_question(context: dict, history: list[FlowResponse]) -> str:
+    """Build the complete question for flow analysis, including instructions and context."""
+    # Build history text
+    history_text = ""
+    if history:
+        history_text = "\n\n## Previous Steps\n\n"
+        for i, step in enumerate(history):
+            history_text += f"### Step {i + 1}\n"
+            loc = step.location
+            history_text += f"- Location: `{loc.file}:{loc.line}` in `{loc.function}()`\n"
+            history_text += f"- Source: `{step.location.source_line}`\n"
+            history_text += f"- Analysis: {step.analysis.description}\n\n"
+
+    # Include FLOW_PROMPT in the question since agents have their own system prompts
+    return f"""# Flow Analysis Task
+
+{FLOW_PROMPT}
+
+---
+
+# Current Analysis Request
+
+Analyze this flow tracking state and return a JSON response.
+
+## Current Context
+
+### Tracking
+- Expression: `{context["tracking"]["expression"]}`
+- Current value: `{context["tracking"]["current_value"]}`
+
+### Location
+- File: `{context["location"]["file"]}`
+- Line: {context["location"]["line"]}
+- Function: `{context["location"]["function"]}`
+- BBCount: {context["location"]["bbcount"]}
+- PC: {context["location"]["pc"]}
+
+### Source
+```
+{context["source"] or "<source unavailable>"}
+```
+
+### Disassembly
+```
+{context["disassembly"]}
+```
+
+### Registers
+```
+{context["registers"]}
+```
+
+### Local Variables
+```
+{context["locals"]}
+```
+
+### Backtrace
+```
+{context["backtrace"]}
+```
+{history_text}
+**IMPORTANT**: Return ONLY a JSON object following the schema above. Do not use any tools.
+Do not wrap in markdown code blocks. Just return the raw JSON."""
+
+
+async def _ask_agent_flow(flow_agent: BaseAgent, gateway: UdbMcpGateway, question: str) -> str:
+    """
+    Ask the agent to analyze flow and return the response.
+
+    Similar to explain_query but for flow analysis.
+    """
+    sock = None
+    server = None
+    mcp_task = None
+    try:
+        sock = socket.create_server(("localhost", 0))
+        _, port = sock.getsockname()
+
+        # Set up a temporary MCP server (required by agent infrastructure)
+        starlette_app = gateway.mcp.sse_app()
+        config = uvicorn.Config(starlette_app, log_level=LOG_LEVEL.lower())
+        server = uvicorn.Server(config)
+        mcp_task = asyncio.create_task(server.serve(sockets=[sock]))
+
+        # Ask the agent - pass tools but instruct LLM not to use them in the question
+        response = await flow_agent.ask(question, port, tools=gateway.tools)
+
+    finally:
+        # Shut down the server
+        if server:
+            server.should_exit = True
+            await server.shutdown()
+        if mcp_task:
+            await mcp_task
+        if sock:
+            sock.close()
+
+    return response
+
+
+def _call_llm_analyze_flow(
+    flow_agent: BaseAgent,
+    gateway: UdbMcpGateway,
+    context: dict,
+    history: list[FlowResponse],
+    debug: bool = False,
+) -> FlowResponse:
+    """
+    Call LLM to analyze current flow step using the agent infrastructure.
+
+    Returns parsed FlowResponse or raises on failure.
+    """
+    global event_loop
+    if not event_loop:
+        event_loop = asyncio.new_event_loop()
+
+    question = _build_flow_question(context, history)
+
+    # Try up to 2 times (initial + 1 retry)
+    last_error = None
+    raw_response = ""
+
+    for attempt in range(2):
+        try:
+            raw_response = event_loop.run_until_complete(
+                _ask_agent_flow(flow_agent, gateway, question)
+            )
+
+            if debug:
+                print(f"\n[DEBUG] Raw LLM response (attempt {attempt + 1}):")
+                print(raw_response)
+                print()
+
+            # Extract and parse JSON
+            json_text = _extract_json_from_response(raw_response)
+            data = json.loads(json_text)
+            response = FlowResponse.model_validate(data)
+            return response
+
+        except (json.JSONDecodeError, ValidationError) as e:
+            last_error = e
+            if not attempt:
+                # Retry once
+                continue
+            # Second failure - give up
+            raise RuntimeError(
+                f"LLM returned invalid JSON after retry: {e}\n\nRaw response:\n{raw_response}"
+            ) from e
+
+    # Should not reach here, but just in case
+    raise RuntimeError(f"Failed to get valid LLM response: {last_error}")
+
+
+def _display_flow_step(step_num: int, response: FlowResponse, source_context: str) -> None:
+    """Display current flow step to user with rich markdown formatting."""
+    from rich.markdown import Markdown
+    from rich.syntax import Syntax
+
+    loc = response.location
+    analysis = response.analysis
+    checkpoint = response.checkpoint
+
+    # Build markdown content
+    md_parts = []
+
+    # Header with location and time
+    pc_str = f"0x{checkpoint.pc:x}" if checkpoint.pc else "?"
+    md_parts.append(
+        f"**Step {step_num}**: `{loc.function}()` at `{Path(loc.file).name}:{loc.line}` "
+        f"(time {checkpoint.bbcount}:{pc_str})"
+    )
+    md_parts.append("")
+
+    # Tracking info
+    md_parts.append(f"**Tracking**: `{checkpoint.expression}` = `{checkpoint.value}`")
+    md_parts.append("")
+
+    # Analysis
+    md_parts.append(f"**Analysis**: {analysis.description}")
+
+    if not analysis.source_binary_match:
+        md_parts.append("")
+        md_parts.append("⚠️ *Source code may not match binary (possible optimization)*")
+
+    # Next steps
+    if response.next_steps:
+        md_parts.append("")
+        md_parts.append("**Next steps**:")
+        for step in response.next_steps:
+            priority_marker = {"high": "HIGH", "medium": "MED", "low": "LOW"}[step.priority]
+            if step.action == "last_value":
+                action_desc = f"Track `{step.expression_to_track}`"
+            elif step.action == "reverse_step_into_current_line":
+                action_desc = f"Step into `{step.target_fn}()`"
+            elif step.action == "reverse_finish":
+                action_desc = f"Return to `{step.target_fn}()`"
+            elif step.action == "reverse_next":
+                action_desc = "Step to previous line"
+            else:
+                action_desc = step.action
+            md_parts.append(f"- **[{step.id}]** {priority_marker}: {action_desc}")
+
+    # Stopping reason
+    if not response.should_continue:
+        reason_msgs = {
+            "origin_found": "✅ Found the origin of this value",
+            "step_limit_reached": "⏹️ Reached maximum tracking steps",
+            "ambiguous_flow": "❓ Flow is too ambiguous to track automatically",
+            "optimized_away": "⚠️ Value was optimized away by compiler",
+            "external_input": "📥 Value comes from external input",
+            "cannot_navigate": "🚫 Cannot navigate to the required location",
+            "llm_error": "❌ Error analyzing the flow",
+        }
+        reason = response.stopping_reason or "unknown"
+        md_parts.append("")
+        md_parts.append(f"**Stopped**: {reason_msgs.get(reason, reason)}")
+
+    # Render with rich
+    md_content = "\n".join(md_parts)
+    console.print(ExplainPanel(Markdown(md_content), title="Flow"))
+
+    # Show source context if available
+    if source_context and source_context.strip():
+        # Source context is already formatted with line numbers and arrows
+        console.print(Syntax(source_context, "c", theme="monokai", line_numbers=False))
+
+
+def _execute_flow_step(gateway: UdbMcpGateway, step: FlowNextStep) -> str | None:
+    """
+    Execute a navigation step based on action type.
+
+    Returns the new expression to track (if changed), or None.
+    """
+    hypothesis = step.reasoning
+
+    if step.action == "last_value":
+        if step.expression_to_track is None:
+            raise ValueError("last_value action requires expression_to_track")
+        gateway.tool_last_value(hypothesis, step.expression_to_track)
+        return step.expression_to_track
+
+    elif step.action == "reverse_step_into_current_line":
+        if step.target_fn is None:
+            raise ValueError("reverse_step_into_current_line action requires target_fn")
+        gateway.tool_reverse_step_into_current_line(hypothesis, step.target_fn)
+        # After stepping into function, we're tracking the return value
+        # The LLM will determine what to track next based on context
+        return None
+
+    elif step.action == "reverse_finish":
+        if step.target_fn is None:
+            raise ValueError("reverse_finish action requires target_fn")
+        gateway.tool_reverse_finish(hypothesis, step.target_fn)
+        return None
+
+    elif step.action == "reverse_next":
+        gateway.tool_reverse_next(hypothesis)
+        return None
+
+    else:
+        raise ValueError(f"Unknown action: {step.action}")
+
+
+def _prompt_user_choice(next_steps: list[FlowNextStep]) -> FlowNextStep | None:
+    """
+    Present next steps to user and get their choice.
+
+    Returns the chosen step, or None to stop.
+    """
+    while True:
+        try:
+            choice_str = ui.get_user_input(prompt=f"Your choice [1-{len(next_steps)}, q to quit]: ")
+        except EOFError:
+            return None
+
+        choice_str = choice_str.strip().lower()
+        if choice_str == "q":
+            return None
+
+        try:
+            choice = int(choice_str)
+            if 1 <= choice <= len(next_steps):
+                return next_steps[choice - 1]
+            print(f"Please enter a number between 1 and {len(next_steps)}")
+        except ValueError:
+            print("Please enter a valid number or 'q' to quit")
+
+
+def _display_flow_summary(
+    history: list[tuple[FlowResponse, FlowNextStep | None]],
+    final: tuple[FlowResponse, FlowNextStep | None] | None,
+    context_lines: int = 2,
+) -> None:
+    """Display a compact summary of the flow tracking session."""
+    # Include final response if not already in history
+    all_steps = list(history)
+    if final:
+        final_resp, _ = final
+        # Check if final is already in history
+        if not history or history[-1][0] != final_resp:
+            all_steps.append(final)
+
+    if not all_steps:
+        console.print("[dim]No flow steps to summarize.[/dim]")
+        return
+
+    console.print()
+    console_whizz(" * Flow Summary")
+
+    # Print each step with source context
+    for i, (step, _) in enumerate(all_steps):
+        loc = step.location
+        cp = step.checkpoint
+
+        # Find the actual line number by searching for source_line in the file
+        # (the debugger position may be off by one or more lines)
+        actual_line = loc.line
+        file_lines: list[str] | None = None
+        try:
+            source_path = Path(loc.file)
+            if source_path.exists() and loc.source_line:
+                file_lines = source_path.read_text().splitlines()
+                source_stripped = loc.source_line.strip()
+                search_range = range(max(0, loc.line - 5), min(len(file_lines), loc.line + 5))
+                for ln in search_range:
+                    if file_lines[ln].strip() == source_stripped:
+                        actual_line = ln + 1  # 1-indexed
+                        break
+        except Exception:
+            pass
+
+        # Display header with the actual source line number
+        loc_str = f"{Path(loc.file).name}:{actual_line}"
+        pc_str = f"0x{cp.pc:x}" if cp.pc else "?"
+        time_str = f"{cp.bbcount}:{pc_str}"
+
+        console.print(
+            f"\n  [dim][{i + 1}][/dim] [cyan]{loc_str}[/cyan] [dim]@ {time_str}[/dim]  "
+            f"[green]{cp.expression}[/green] = {cp.value}"
+        )
+
+        # Show LLM-generated summary as markdown
+        if step.analysis.summary:
+            from rich.markdown import Markdown
+
+            console.print(Padding(Markdown(step.analysis.summary), (0, 6)))
+
+        # Show source context (N lines before, current, N lines after)
+        try:
+            if file_lines is not None and context_lines >= 0:
+                start = max(0, actual_line - 1 - context_lines)  # 0-indexed
+                end = min(len(file_lines), actual_line + context_lines)
+
+                # Strip leading blank lines (but keep actual_line)
+                actual_idx = actual_line - 1  # 0-indexed
+                while start < actual_idx and not file_lines[start].strip():
+                    start += 1
+                # Strip trailing blank lines (but keep actual_line)
+                while end > actual_idx + 1 and not file_lines[end - 1].strip():
+                    end -= 1
+
+                source_context = file_lines[start:end]
+
+                # Find common indentation to de-indent
+                non_empty = [ln for ln in source_context if ln.strip()]
+                if non_empty:
+                    min_indent = min(len(ln) - len(ln.lstrip()) for ln in non_empty)
+                else:
+                    min_indent = 0
+
+                # Display with arrow prefix (aligned with explanation indent)
+                for line_num in range(start, end):
+                    line_content = file_lines[line_num]
+                    # De-indent
+                    if len(line_content) >= min_indent:
+                        line_content = line_content[min_indent:]
+                    display_num = line_num + 1  # 1-indexed
+
+                    if display_num == actual_line:
+                        console.print(f"      [bold]->[/bold] [white]{line_content}[/white]")
+                    else:
+                        console.print(f"         [dim]{line_content}[/dim]")
+            elif loc.source_line:
+                # No file access, just show the source line
+                console.print(f"      [bold]->[/bold] [white]{loc.source_line.strip()}[/white]")
+        except Exception:
+            if loc.source_line:
+                console.print(f"      [bold]->[/bold] [white]{loc.source_line.strip()}[/white]")
+
+    # Final conclusion
+    final_response = final[0] if final else None
+    if final_response and not final_response.should_continue and final_response.stopping_reason:
+        from rich.markdown import Markdown
+
+        reason_msgs = {
+            "origin_found": "✅ Origin found",
+            "optimized_away": "⚠️ Optimized away",
+            "external_input": "📥 External input",
+            "ambiguous_flow": "❓ Ambiguous",
+        }
+        msg = reason_msgs.get(final_response.stopping_reason, final_response.stopping_reason)
+        console.print(f"\n[bold]{msg}[/bold]:")
+        console.print(Markdown(final_response.analysis.description))
+    console.print()
+
+
+@command.register(
+    gdb.COMMAND_USER,
+    arg_parser=command_args.DashArgs(
+        command_args.Option(
+            long="agent",
+            short="a",
+            value=command_args.Choice(AgentRegistry.available_agents(), optional=True),
+        ),
+        command_args.Option(
+            long="debug",
+            short="d",
+        ),
+        command_args.Option(
+            long="max-steps",
+            short="m",
+            value=command_args.Integer(purpose="max steps", default=20, minimum=1),
+        ),
+        command_args.Option(
+            long="context",
+            short="c",
+            value=command_args.Integer(purpose="context lines", default=2, minimum=0),
+        ),
+        allow_remainders=True,
+    ),
+)
+def flow(udb: udb_base.Udb, args: Any) -> None:
+    """
+    Track the flow of a value backward through program execution.
+
+    This command uses AI to analyze how a variable or expression got its current value,
+    stepping backward through time to trace its origin.
+
+    Usage: flow [--agent NAME] [--debug] [--max-steps N] [--context N] <expression>
+
+    Options:
+      --agent, -a     AI agent to use (default: auto-detect)
+      --debug, -d     Show raw LLM JSON responses for debugging
+      --max-steps, -m Maximum number of tracking steps (default: 20)
+      --context, -c   Lines of source context in summary (default: 2)
+    """
+    expression = args.untokenized_remainders
+    if not expression:
+        print("Usage: flow <expression>")
+        print("Example: flow my_variable")
+        return
+
+    debug = args.debug
+    max_steps = args.max_steps
+
+    # Select or reuse agent (shared with explain command)
+    global agent
+    if agent:
+        # The agent cannot be switched within a session.
+        if args.agent and args.agent != agent.name:
+            raise Exception(
+                f"Cannot switch agents within session - current agent is {agent.name!r}."
+            )
+    else:
+        # If no agent was previously selected, choose one now.
+        agent = AgentRegistry.select_agent(args.agent, log_level=LOG_LEVEL)
+
+    gateway = UdbMcpGateway(udb)
+    # History stores (response, chosen_step) tuples; chosen_step is None for final step
+    history: list[tuple[FlowResponse, FlowNextStep | None]] = []
+    step_num = 0
+    last_response: FlowResponse | None = None
+
+    console_whizz(f" * Tracking flow of `{expression}`...")
+
+    with temporary_gdb_settings(udb):
+        while step_num < max_steps:
+            # Gather complete context
+            try:
+                context = _gather_flow_context(udb, expression)
+            except Exception as e:
+                print(f"Error gathering context: {e}")
+                break
+
+            # Call LLM to analyze (extract just responses from history tuples)
+            try:
+                history_responses = [resp for resp, _ in history]
+                last_response = _call_llm_analyze_flow(
+                    agent, gateway, context, history_responses, debug=debug
+                )
+            except RuntimeError as e:
+                print(f"Error from LLM: {e}")
+                break
+
+            # Display to user
+            _display_flow_step(step_num + 1, last_response, context.get("source", ""))
+
+            # Check if should stop
+            if not last_response.should_continue:
+                break
+
+            # Handle next steps
+            next_steps = last_response.next_steps
+
+            if not next_steps:
+                print("No next steps available. Stopping.\n")
+                break
+
+            elif len(next_steps) == 1:
+                # Linear flow - auto-continue
+                chosen = next_steps[0]
+                console.print(f"[dim]→ Auto-selecting [{chosen.id}][/dim]\n")
+
+            else:
+                # Fork - ask user
+                chosen_step = _prompt_user_choice(next_steps)
+                if chosen_step is None:
+                    print("Stopping flow tracking.\n")
+                    break
+                chosen = chosen_step
+                print()
+
+            # Execute chosen step
+            try:
+                new_expression = _execute_flow_step(gateway, chosen)
+                if new_expression:
+                    expression = new_expression
+            except Exception as e:
+                print(f"Navigation failed: {e}")
+                print("Stopping flow tracking.\n")
+                break
+
+            # Update history with chosen step
+            history.append((last_response, chosen))
+            step_num += 1
+
+        if step_num >= max_steps:
+            console.print(f"[yellow]Stopped: Reached maximum tracking steps ({max_steps})[/yellow]")
+
+    # Print summary (pass final response with None for chosen step)
+    _display_flow_summary(history, (last_response, None) if last_response else None, args.context)
 
 
 command.register_prefix(

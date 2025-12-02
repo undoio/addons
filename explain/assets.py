@@ -25,3 +25,6 @@ AMP_PROMPT = FRAMING_PROMPT + (_EXTENSION_PATH / "amp_prompt.md").read_text(enco
 
 CODEX_PROMPT = (_EXTENSION_PATH / "codex_prompt.md").read_text(encoding="UTF-8")
 """Codex-specific prompt to encourage thorough investigation."""
+
+FLOW_PROMPT = (_EXTENSION_PATH / "flow_prompt.md").read_text(encoding="UTF-8")
+"""Prompt for flow analysis - tracking value origins through execution."""

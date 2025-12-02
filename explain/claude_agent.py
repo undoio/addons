@@ -112,39 +112,56 @@ class ClaudeAgent(BaseAgent):
 
         result = ""
         claude = None
+        question_path = None
         try:
-            claude = await asyncio.create_subprocess_exec(
-                str(self.agent_bin),
-                *(["--resume", self._session_id] if self._session_id else []),
-                "--model",
-                "opus",
-                "--mcp-config",
-                mcp_config_path,
-                "--allowedTools",
-                allowed_tools,
-                "--output-format",
-                "stream-json",
-                "--verbose",  # Required for --output-format stream-json
-                "-p",
-                question,
-                "--system-prompt",
-                SYSTEM_PROMPT,
-                *self.additional_flags,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            assert claude.stdout and claude.stderr
+            # Write question to temp file to avoid command line length limits
+            question_fd, question_path = mkstemp(prefix="claude_prompt", suffix=".md")
+            with contextlib.closing(os.fdopen(question_fd, "w")) as question_file:
+                question_file.write(question)
 
-            result = await self._handle_messages(claude.stdout)
+            # Open the question file for reading as stdin
+            question_stdin = open(question_path, "r")  # noqa: SIM115
+            try:
+                claude = await asyncio.create_subprocess_exec(
+                    str(self.agent_bin),
+                    *(["--resume", self._session_id] if self._session_id else []),
+                    "--model",
+                    "opus",
+                    "--mcp-config",
+                    mcp_config_path,
+                    "--allowedTools",
+                    allowed_tools,
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                    "-p",
+                    "--system-prompt",
+                    SYSTEM_PROMPT,
+                    *self.additional_flags,
+                    stdin=question_stdin,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                assert claude.stdout and claude.stderr
 
-            stderr = await claude.stderr.read()
-            if stderr:
-                print("Errors:\n", stderr)
+                result = await self._handle_messages(claude.stdout)
+
+                stderr = await claude.stderr.read()
+                if stderr:
+                    print("Errors:\n", stderr)
+            finally:
+                question_stdin.close()
 
         finally:
             # Make sure Claude is properly cleaned up if we exited early.
             if claude and claude.returncode is None:
                 claude.terminate()
                 await claude.wait()
+            # Clean up temp file
+            if question_path:
+                try:
+                    os.unlink(question_path)
+                except OSError:
+                    pass
 
         return result
