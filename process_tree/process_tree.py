@@ -2,22 +2,23 @@
 """
 Process Tree Visualizer
 
-Reads .undo recording files and generates a process tree visualization.
+Reads Undo recordings and generates a process tree visualization.
 Shows both ASCII tree output and SVG timeline diagrams.
 
 Can be used as a standalone script or as a GDB command.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
-import shlex
 import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
 
 
 try:
@@ -37,7 +38,7 @@ def check_undo_available() -> None:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ForkPosition:
     """Represents a fork point in the process tree layout."""
 
@@ -52,7 +53,7 @@ class LayoutInfo:
 
     y: int
     line_start_x: int = 0
-    fork_positions: List[ForkPosition] = field(default_factory=list)
+    fork_positions: list[ForkPosition] = field(default_factory=list)
 
 
 @dataclass
@@ -60,72 +61,73 @@ class Process:
     """Represents a single process in the tree."""
 
     pid: int
-    ppid: Optional[int]
+    ppid: int | None
     recording_file: str
     start_time: float = 0.0
-    children: List["Process"] = field(default_factory=list)
+    children: list[Process] = field(default_factory=list)
 
+    @classmethod
+    def from_recording(cls, recording_file: Path) -> Process | None:
+        """Create a Process from an Undo recording file.
 
-class RecordingParser:
-    """Handles extraction of process information from .undo recording files."""
-
-    def extract_process_info(
-        self, recording_file: Path
-    ) -> Tuple[Optional[int], Optional[int], float]:
-        """Extract PID, PPID, and start time from a .undo recording file."""
+        Returns None if the recording cannot be parsed.
+        """
         try:
-            # Get process info (PID/PPID)
-            pid, ppid = self._get_process_ids(recording_file)
-            if pid is None:
-                return None, None, 0.0
+            # Get all recording data at once
+            cmd = ["undo", "recording-json", str(recording_file)]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(result.stdout)
 
-            # Get timing info
-            start_time = self._get_start_time(recording_file)
+            # Extract process IDs
+            pid = data["debuggee"]["state_load_rchild_pid"]
+            ppid = data["debuggee"]["rchild_ppid"]
 
-            return pid, ppid, start_time
+            # Extract start time
+            utc_start = data["header"]["utc_start"]
+            utc_start_ns = data["header"]["utc_start_ns"]
+            start_time = float(utc_start) + float(utc_start_ns) / 1_000_000_000
+
+            return cls(
+                pid=pid,
+                ppid=ppid,
+                recording_file=str(recording_file),
+                start_time=start_time,
+            )
 
         except subprocess.CalledProcessError as e:
             print(f"Error processing {recording_file}: {e}", file=sys.stderr)
             if e.stderr:
                 print(f"  stderr: {e.stderr.strip()}", file=sys.stderr)
-            return None, None, 0.0
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            return None
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             print(f"Error processing {recording_file}: {e}", file=sys.stderr)
-            return None, None, 0.0
-
-    def _run_recording_json(self, recording_file: Path, section: str) -> dict:
-        """Run undo recording-json and return parsed JSON data."""
-        cmd = ["undo", "recording-json", "-s", section, str(recording_file)]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return json.loads(result.stdout)
-
-    def _get_process_ids(self, recording_file: Path) -> Tuple[Optional[int], Optional[int]]:
-        """Get PID and PPID from recording file."""
-        data = self._run_recording_json(recording_file, "d")
-        pid = data["debuggee"]["state_load_rchild_pid"]
-        ppid = data["debuggee"]["rchild_ppid"]
-        return pid, ppid
-
-    def _get_start_time(self, recording_file: Path) -> float:
-        """Get start time from recording file header."""
-        data = self._run_recording_json(recording_file, "h")
-        utc_start = data["header"]["utc_start"]
-        utc_start_ns = data["header"]["utc_start_ns"]
-        try:
-            return float(utc_start) + float(utc_start_ns) / 1_000_000_000
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"Invalid timestamp data in recording header: {e}") from e
+            return None
 
 
 class ProcessTree:
     """Represents and manages a tree of processes."""
 
     def __init__(self):
-        self.processes: Dict[int, Process] = {}
-        self.root: Optional[Process] = None
+        self.processes: dict[int, Process] = {}
+        self.root: Process | None = None
 
     def add_process(self, process: Process) -> None:
-        """Add a process to the tree."""
+        """Add a process to the tree.
+
+        If a process with the same PID already exists, a warning is printed and
+        the new process replaces the old one. This can happen if multiple recordings
+        share the same PID (e.g., from different recording sessions saved to the
+        same directory).
+        """
+        if process.pid in self.processes:
+            existing = self.processes[process.pid]
+            print(
+                f"Warning: Duplicate PID {process.pid} found: "
+                f"{Path(existing.recording_file).name} and {Path(process.recording_file).name}. "
+                f"This usually means multiple recordings have been saved from the same session. "
+                f"Using {Path(process.recording_file).name}.",
+                file=sys.stderr,
+            )
         self.processes[process.pid] = process
 
     def build_relationships(self) -> None:
@@ -220,7 +222,7 @@ class SVGRenderer:
         # Save file
         self._save_svg(svg, output_file)
 
-    def _calculate_layout(self, tree: ProcessTree) -> Dict[int, LayoutInfo]:
+    def _calculate_layout(self, tree: ProcessTree) -> dict[int, LayoutInfo]:
         """Calculate positions for all processes and their forks."""
         assert tree.root is not None, "tree.root must not be None"
         layout = {}
@@ -268,7 +270,7 @@ class SVGRenderer:
         calculate_x_positions(tree.root, self.line_start_x)
         return layout
 
-    def _calculate_dimensions(self, layout: Dict[int, LayoutInfo]) -> Tuple[int, int]:
+    def _calculate_dimensions(self, layout: dict[int, LayoutInfo]) -> tuple[int, int]:
         """Calculate required SVG dimensions."""
         max_x = max(info.line_start_x + self.line_length for info in layout.values())
         max_y = max(info.y for info in layout.values())
@@ -305,7 +307,7 @@ class SVGRenderer:
         self,
         svg: ET.Element,
         processes: Iterable[Process],
-        layout: Dict[int, LayoutInfo],
+        layout: dict[int, LayoutInfo],
     ) -> None:
         """Draw horizontal timeline lines for each process."""
         for process in processes:
@@ -350,7 +352,7 @@ class SVGRenderer:
         self,
         svg: ET.Element,
         processes: Iterable[Process],
-        layout: Dict[int, LayoutInfo],
+        layout: dict[int, LayoutInfo],
     ) -> None:
         """Draw fork connections between parent and child processes."""
         for process in processes:
@@ -406,60 +408,52 @@ class SVGRenderer:
         print(f"SVG visualization saved to: {output_file}")
 
 
-class ProcessTreeVisualizer:
-    """Main class that coordinates loading, parsing, and rendering."""
+def load_recordings(recordings_dir: Path) -> ProcessTree:
+    """Load all .undo files and build process tree."""
+    recording_files = list(recordings_dir.glob("*.undo"))
+    if not recording_files:
+        raise ValueError(f"No .undo files found in {recordings_dir}")
 
-    def __init__(self):
-        self.parser = RecordingParser()
-        self.ascii_renderer = ASCIIRenderer()
-        self.svg_renderer = SVGRenderer()
+    print(f"Found {len(recording_files)} recording files")
 
-    def load_and_visualize(self, recordings_dir: Path, output_svg: Optional[str] = None) -> None:
-        """Load recordings and generate visualizations."""
-        # Load all recordings
-        tree = self._load_recordings(recordings_dir)
+    tree = ProcessTree()
+    for recording_file in recording_files:
+        process = Process.from_recording(recording_file)
+        if process is not None:
+            tree.add_process(process)
+            print(
+                f"Loaded: PID {process.pid}, PPID {process.ppid}, "
+                f"Start: {process.start_time:.9f}, File: {recording_file.name}"
+            )
 
-        # Generate outputs
-        # Generate SVG only if explicitly requested via output_svg parameter
-        if output_svg:
-            self.svg_renderer.render(tree, output_svg)
+    tree.build_relationships()
+    return tree
 
-        # Always show ASCII output
-        self.ascii_renderer.render(tree)
 
-    def _load_recordings(self, recordings_dir: Path) -> ProcessTree:
-        """Load all .undo files and build process tree."""
-        recording_files = list(recordings_dir.glob("*.undo"))
-        if not recording_files:
-            raise ValueError(f"No .undo files found in {recordings_dir}")
+def visualize_process_tree(recordings_dir: Path, output_svg: str | None = None) -> None:
+    """Load recordings and generate visualizations."""
+    tree = load_recordings(recordings_dir)
 
-        print(f"Found {len(recording_files)} recording files")
+    # Generate SVG only if explicitly requested
+    if output_svg:
+        svg_renderer = SVGRenderer()
+        svg_renderer.render(tree, output_svg)
 
-        tree = ProcessTree()
-        for recording_file in recording_files:
-            pid, ppid, start_time = self.parser.extract_process_info(recording_file)
-            if pid is not None:
-                process = Process(pid, ppid, str(recording_file), start_time)
-                tree.add_process(process)
-                print(
-                    f"Loaded: PID {pid}, PPID {ppid}, Start: {start_time:.9f}, "
-                    f"File: {recording_file.name}"
-                )
-
-        tree.build_relationships()
-        return tree
+    # Always show ASCII output
+    ascii_renderer = ASCIIRenderer()
+    ascii_renderer.render(tree)
 
 
 if HAS_GDB:
 
     class ProcessTreeCommand(gdb.Command):
         """
-        Visualize process trees from .undo recording files.
+        Visualize process trees from Undo recordings.
 
         Usage: process-tree RECORDINGS_DIR [--output-svg FILE]
 
         Arguments:
-            RECORDINGS_DIR: Directory containing .undo recording files
+            RECORDINGS_DIR: Directory containing Undo recordings
 
         Options:
             --output-svg FILE: Output SVG file path (generates SVG in addition to ASCII)
@@ -480,23 +474,24 @@ if HAS_GDB:
                 raise gdb.GdbError("Usage: process-tree RECORDINGS_DIR [--output-svg FILE]")
 
             # Parse arguments
-            args = shlex.split(argument)
+            args = gdb.string_to_argv(argument)
             recordings_dir = Path(args[0]).expanduser()
             output_svg = None
 
             # Parse optional arguments
             i = 1
             while i < len(args):
-                if args[i] == "--output-svg":
+                arg = args[i]
+                if arg in ("-output-svg", "--output-svg"):
                     if i + 1 >= len(args):
-                        raise gdb.GdbError("--output-svg requires a filename")
+                        raise gdb.GdbError(f"{arg} requires a filename")
                     output_svg = str(Path(args[i + 1]).expanduser())
                     i += 2
                 else:
-                    raise gdb.GdbError(f"Unknown argument: {args[i]}")
+                    raise gdb.GdbError(f"Unknown argument: {arg}")
 
             # Validate recordings directory
-            if not recordings_dir.exists() or not recordings_dir.is_dir():
+            if not recordings_dir.is_dir():
                 raise gdb.GdbError(f"Error: {recordings_dir} is not a valid directory")
 
             # Check if undo is available
@@ -507,8 +502,7 @@ if HAS_GDB:
 
             # Create visualizer and generate output
             try:
-                visualizer = ProcessTreeVisualizer()
-                visualizer.load_and_visualize(recordings_dir, output_svg)
+                visualize_process_tree(recordings_dir, output_svg)
             except Exception as e:
                 raise gdb.GdbError(f"Error generating process tree: {e}")
 
@@ -516,10 +510,10 @@ if HAS_GDB:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Visualize process trees from .undo recording files. "
+        description="Visualize process trees from Undo recordings. "
         "By default, only ASCII output is shown."
     )
-    parser.add_argument("recordings_dir", help="Directory containing .undo recording files")
+    parser.add_argument("recordings_dir", help="Directory containing Undo recordings")
     parser.add_argument(
         "--output-svg", help="Output SVG file path (generates SVG in addition to ASCII)"
     )
@@ -534,15 +528,14 @@ def main():
         return 1
 
     recordings_dir = Path(args.recordings_dir).expanduser()
-    if not recordings_dir.exists() or not recordings_dir.is_dir():
+    if not recordings_dir.is_dir():
         print(f"Error: {recordings_dir} is not a valid directory", file=sys.stderr)
         return 1
 
     output_svg = str(Path(args.output_svg).expanduser()) if args.output_svg else None
 
-    visualizer = ProcessTreeVisualizer()
     try:
-        visualizer.load_and_visualize(recordings_dir, output_svg)
+        visualize_process_tree(recordings_dir, output_svg)
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 1

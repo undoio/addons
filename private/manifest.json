@@ -64,11 +64,11 @@
             "help": "whatmap EXPRESSION -- Locate memory map containing EXPRESSION.\n\n\nExamples:\n\nwhatmap my_variable: looks up the map where my_variable is stored.\n\nwhatmap *0x1234: looks up the map containing the address 0x1234."
         },
         "process-tree": {
-            "description": "Visualizes process trees from .undo recording files showing parent-child relationships.",
+            "description": "Visualizes process trees from Undo recordings showing parent-child relationships.",
             "repo": "addons",
             "script": "process_tree/process_tree.py",
             "version_min": "9.1.0",
-            "help": "process-tree RECORDINGS_DIR [OPTIONS] -- Visualize process tree from .undo recordings.\n\n\nBy default, only ASCII tree output is shown. Use --output-svg to also generate an SVG.\n\n\nRequires 'undo' executable to be available on PATH.\n\n\nOptions:\n\n--output-svg FILE: Output SVG file path (generates SVG in addition to ASCII)\n\n\nExamples:\n\nprocess-tree /path/to/recordings\n\nprocess-tree /path/to/recordings --output-svg tree.svg"
+            "help": "process-tree RECORDINGS_DIR [OPTIONS] -- Visualize process tree from Undo recordings.\n\n\nBy default, only ASCII tree output is shown. Use --output-svg to also generate an SVG.\n\n\nOptions:\n\n--output-svg FILE: Output SVG file path (generates SVG in addition to ASCII)\n\n\nExamples:\n\nprocess-tree /path/to/recordings\n\nprocess-tree /path/to/recordings --output-svg tree.svg"
         },
         "altui": {
             "description": "Altui provides a modern and user-friendly alternative to plain UDB and to TUI mode.",
