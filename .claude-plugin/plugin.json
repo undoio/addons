@@ -9,7 +9,7 @@
   "homepage": "https://github.com/undoio/addons/tree/master/explain",
   "mcpServers": {
     "undo-debugger": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
+      "command": "${CLAUDE_PLUGIN_ROOT}/explain/claude_code_plugin/run.sh",
       "args": []
     }
   },
