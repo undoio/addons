@@ -11,7 +11,7 @@
     {
       "name": "undo",
       "description": "Debug and analyze Undo recordings using AI-powered queries",
-      "source": "./explain/claude_code_plugin",
+      "source": "./",
       "category": "development",
       "version": "1.0.0",
       "author": {

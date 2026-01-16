@@ -326,6 +326,10 @@ def record(target_command: list[str], recording: Path, force: bool = False) -> i
 
     Args:
         target_command: The command to execute as a list of arguments (e.g., ["./program", "arg1"]).
+               The first argument for the command MUST be the actual ELF executable to record, not
+               a shell wrapper or another command. For instance, `["./my_command", "arg1"]` is
+               valid, but `["timeout", "5", "./my_command", "arg1"]` or `["/bin/sh", "-c",
+               "./my_command arg1"]` are not).
         recording: The path where the UDB recording should be saved.
         force: If False and the recording file already exists, raises an exception asking the user
                for confirmation. If True, overwrites the existing file without prompting.
