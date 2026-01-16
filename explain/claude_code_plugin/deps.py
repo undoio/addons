@@ -17,7 +17,10 @@ repo_root = Path(__file__).resolve().parent.parent.parent
 
 
 def ensure_sys_paths() -> None:
-    deps_dir = xdg_dirs.get_plugin_data_dir() / "packages"
+    # Use per-Python-version package directories so switching Python versions
+    # doesn't require reinstalling (each version keeps its own cached packages).
+    py_version = f"{sys.version_info[0]}.{sys.version_info[1]}"
+    deps_dir = xdg_dirs.get_plugin_data_dir() / f"packages-{py_version}"
     sys.path.insert(0, str(deps_dir))
     _install_deps(deps_dir)
 
