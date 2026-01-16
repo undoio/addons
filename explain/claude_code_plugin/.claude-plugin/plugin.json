@@ -12,5 +12,18 @@
       "command": "${CLAUDE_PLUGIN_ROOT}/run.sh",
       "args": []
     }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/explain/claude_code_plugin/hooks/check_debugger_usage.sh"
+          }
+        ]
+      }
+    ]
   }
 }
