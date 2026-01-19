@@ -336,9 +336,19 @@ def record(target_command: list[str], recording: Path, force: bool = False) -> i
     """
     if recording.exists() and not force:
         raise RuntimeError(
-            f"Recording file {recording} already exists. "
-            f"Ask the user if they want to overwrite it. "
-            f"If yes, call this tool again with force=true."
+            textwrap.dedent(
+                f"""\
+                Recording file {recording} already exists. Give the user the option to:
+                - Overwrite the existing recording (to do so, call this tool again with
+                  `force=true`)
+                - Use the existing recording
+                - Record to a different file
+
+                Just because you found a pre-existing recording, do NOT assume that it captured the
+                problem the user is trying to debug now unless the user says so. It may be from a
+                previous unrelated run.
+                """
+            )
         )
 
     try:
