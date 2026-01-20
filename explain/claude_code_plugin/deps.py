@@ -68,6 +68,8 @@ def _install_deps(deps_dir: Path) -> None:
         "install",
         "--quiet",
         "--upgrade",
+        "--python",
+        sys.executable,
         "--target",
         str(deps_dir),
     ] + deps
