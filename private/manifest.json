@@ -74,8 +74,14 @@
             "python_package_dir": "altui_packages",
             "version_min": "7.0.0"
         },
+        "python": {
+            "description": "Python debugging support (2nd gen).",
+            "repo": "python",
+            "script": "python/src/ubeacon/extension/startup.py",
+            "version_min": "7.0.0"
+        },
         "python-debug": {
-            "description": "Proof-of-concept Python debug support.",
+            "description": "Proof-of-concept Python debug support (1st gen).",
             "repo": "python-debugging",
             "script": "libpython.gdb",
             "add_to_python_path": [
