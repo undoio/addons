@@ -1,6 +1,9 @@
 Follow `fork()`
 ===============
 
+**This addon has been superceded by the `--on-fork` options to live-record in Undo 9.1. Please
+use `--on-fork` if you have Undo 9.1 or later.**
+
 Often, when recording, engineers might want to record both the parent and the
 children generated during the run.
 This pre-load library intercepts the calls to 'fork()' and calls the
