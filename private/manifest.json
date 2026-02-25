@@ -78,7 +78,7 @@
             "description": "Python debugging support (2nd gen).",
             "repo": "python",
             "script": "python/src/ubeacon/extension/startup.py",
-            "version_min": "7.0.0"
+            "version_min": "8.2.0"
         },
         "python-debug": {
             "description": "Proof-of-concept Python debug support (1st gen).",
