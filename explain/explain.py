@@ -490,6 +490,7 @@ class UdbMcpGateway:
     @report
     @source_context
     @collect_output
+    @revert_time_on_failure
     @chain_of_thought
     def tool_reverse_finish(self, target_fn: str) -> None:
         """
@@ -500,29 +501,24 @@ class UdbMcpGateway:
         which will improve performance.
 
         On success it will pop at least one stack frame, even in recursive calls. On failure it will
-        return to the originally-selected stack frame.
+        return to the original point in time.
 
         Params:
         target_fn: the function you want to reverse-finish back to. This must be present in
                    the current backtrace or the command will fail.
         """
-        orig_frame = gdbutils.selected_frame()
-        try:
-            frame = orig_frame.older()
-            while frame and frame.name() != target_fn:
-                frame = frame.older()
+        frame = gdbutils.selected_frame().older()
+        while frame and frame.name() != target_fn:
+            frame = frame.older()
 
-            if not frame:
-                raise Exception("No such frame in current backtrace.")
+        if not frame:
+            raise Exception("No such frame in current backtrace.")
 
-            # Finish out into the specified frame.
-            frame.newer().select()
-            self.udb.execution.reverse_finish(cmd="reverse-finish")
+        # Finish out into the specified frame.
+        frame.newer().select()
+        self.udb.execution.reverse_finish(cmd="reverse-finish")
 
-            assert gdbutils.selected_frame().name() == target_fn
-        except:
-            orig_frame.select()
-            raise
+        assert gdbutils.selected_frame().name() == target_fn
 
     def _reverse_into_target_function(self, target_fn: str) -> str:
         """
