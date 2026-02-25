@@ -453,6 +453,7 @@ class UdbMcpGateway:
     @report
     @source_context
     @collect_output
+    @revert_time_on_failure
     @chain_of_thought
     def tool_ugo_sender(self) -> None:
         """
