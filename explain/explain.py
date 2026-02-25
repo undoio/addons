@@ -599,15 +599,14 @@ class UdbMcpGateway:
                 # Step further back to ensure we're at the return statement.
                 with gdbutils.temporary_parameter("listsize", 1):
                     while "return" not in gdbutils.execute_to_string("list"):
+                        if target_start_bp.hit_count > 1:
+                            # We've gone back to the start of the function without finding
+                            # a return statement. This can happen with single-line functions.
+                            break
                         self.udb.execution.reverse_next(cmd="reverse-next")
 
                 # Check we're still in the function we intended.
                 assert gdb.selected_frame().name() == target_fn
-
-                # And that we've not gone back further than planned.
-                assert (
-                    target_start_bp.hit_count == 1
-                ), "Unexpectedly reached the start of the target function."
 
         if LOG_LEVEL == "DEBUG":
             print(f"_reverse_into_target_function internal messages:\n{collector.output}")
