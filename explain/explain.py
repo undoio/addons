@@ -595,7 +595,7 @@ class UdbMcpGateway:
             assert gdb.selected_frame().name() == target_fn
 
             func = gdb.selected_frame().function()
-            if func and func.type.target() != gdb.TYPE_CODE_VOID:
+            if func and func.type.target().code != gdb.TYPE_CODE_VOID:
                 # Step further back to ensure we're at the return statement.
                 with gdbutils.temporary_parameter("listsize", 1):
                     while "return" not in gdbutils.execute_to_string("list"):
