@@ -157,6 +157,29 @@ debug tool:
     last a OR last b (to investigate why the `if` statement was entered)
 ```
 
+## Annotations
+
+Annotations are markers embedded in the recording at specific interesting points in time. They
+should be retrieved early to help inform the investigation.
+
+`annotations_list` can be used to list annotations in a recording, with optional name and detail
+filters. A recording may contain thousands of annotations, so the output may be paginated. If the
+`total` field is larger than `returned`, further annotations can be requested by increasing the
+`offset` parameter.
+
+`annotations_count` can be used to count the total number of annotations matching the
+specified `name` and `detail` parameters, without returning them.
+
+Searching source code for the debugged program may help to identify useful annotation names and
+details. Annotations are added by the debugged program with the `undoex_annotation_add_raw_data`,`undoex_annotation_add_int` or `undoex_annotation_add_text` functions.
+
+Only fetch annotations you actually need. There may be thousands of annotations, so prefer targeted
+queries to `annotations_list` over iterating through all annotations.
+
+You can go to an annotation with `annotation_goto`. If there are multiple annotations with the
+required name and detail, provide the bbcount of the annotation instead. The bbcount for each
+annotation is also returned within `annotations_list`.
+
 ## Bookmarks
 
 Set bookmarks (using `ubookmark`) at interesting points in recorded history if they may require

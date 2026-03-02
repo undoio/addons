@@ -149,6 +149,9 @@ def collect_output(fn: Callable[P, None]) -> Callable[P, str]:
 SOURCE_CONTEXT_LINES = 5
 """The maximum size of source context to show either side of the current position."""
 
+ANNOTATIONS_PAGE_LIMIT = 200
+"""A cap on the number of annotations returned in a single call to annotations_list."""
+
 
 def get_context(fname: str, line: int) -> str:
     """
@@ -727,6 +730,129 @@ class UdbMcpGateway:
         Use this to investigate further from an interesting point in time.
         """
         self.udb.bookmarks.goto(name)
+
+    @report
+    @chain_of_thought
+    def tool_annotations_list(
+        self,
+        name: str | None = None,
+        detail: str | None = None,
+        limit: int = ANNOTATIONS_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> dict:
+        """
+        Returns a list of annotations in the recording.
+
+        Use `annotations_count` first if expecting a large result set, to determine whether to apply
+        filters or pagination with `annotations_list`.
+
+        Params:
+        - `name`: if provided, only return annotations with this name
+        - `detail`: if provided, only return annotations with this detail
+        - `limit`: maximum number of annotations to return (default and maximum value: 200)
+        - `offset`: number of annotations to skip from the start (default: 0)
+
+        Returns a dict with:
+        - `annotations`: list of annotations {"name", "detail", "content", "bbcount"} in time order
+        - `total`: total number of matching annotations (across all pages)
+        - `returned`: number of annotations in this response
+        """
+        if limit < 1 or limit > ANNOTATIONS_PAGE_LIMIT:
+            raise Exception(f"Limit must be in the range 1-{ANNOTATIONS_PAGE_LIMIT}.")
+
+        # Prior to UDB 9.2, `annotations.get()` required `name` to be `str` instead of `str | None`.
+        # For backwards compatibility, we convert name from None to "" here, which means do not
+        # filter by name. This also works with 9.2+.
+        name_str = name if name is not None else ""
+        results = self.udb.annotations.get(name_str, detail)
+        total = len(results)
+
+        page = results[offset : offset + limit]
+        returned = len(page)
+
+        response: dict = {
+            "annotations": [
+                {
+                    "name": r.name,
+                    "detail": r.detail,
+                    "content": r.get_content_as_printable_text(),
+                    "bbcount": r.bbcount,
+                }
+                for r in page
+            ],
+            "total": total,
+            "returned": returned,
+        }
+
+        return response
+
+    @report
+    @chain_of_thought
+    def tool_annotations_count(self, name: str | None = None, detail: str | None = None) -> int:
+        """
+        Find the total count of annotations matching the given filters, without returning content.
+
+        Use this before `annotations_list` when you expect a large number of annotations, to
+        determine whether to apply filters or pagination.
+
+        Params:
+        - `name`: if provided, only count annotations with this name.
+        - `detail`: if provided, only count annotations with this detail.
+
+        Returns the number of annotations.
+        """
+
+        # Prior to UDB 9.2, `annotations.get()` required `name` to be `str` instead of `str | None`.
+        # For backwards compatibility, we convert name from None to "" here, which means do not
+        # filter by name. This also works with 9.2+.
+        name_str = name if name is not None else ""
+        results = self.udb.annotations.get(name_str, detail)
+        return len(results)
+
+    @report
+    @source_context
+    @collect_output
+    @chain_of_thought
+    def tool_annotation_goto(
+        self,
+        name: str | None = None,
+        detail: str | None = None,
+        bbcount: int | None = None,
+    ) -> None:
+        """
+        Navigate to the point in recorded history marked by the specified annotation.
+
+        Both `name` and `detail` must together identify a unique annotation. If multiple
+        annotations match, you should instead specify a bbcount time belonging to the required
+        annotation.
+
+        Use `annotations_list` first to discover available annotations and their exact names,
+        details and bbcount.
+        """
+
+        if bbcount is not None:
+            self.udb.time.goto(bbcount)
+            return
+
+        # Prior to UDB 9.2, `annotations.get()` required `name` to be `str` instead of `str | None`.
+        # For backwards compatibility, we convert name from None to "" here, which means do not
+        # filter by name. This also works with 9.2+.
+        name_str = name if name is not None else ""
+        results = self.udb.annotations.get(name_str, detail)
+        if not results:
+            raise Exception(
+                f"No annotation found with name={name_str!r}"
+                + (f", detail={detail!r}" if detail else "")
+                + ". Use annotations_list to see available annotations."
+            )
+        if len(results) != 1:
+            raise Exception(
+                f"Multiple annotations match name={name_str!r}"
+                + (f", detail={detail!r}" if detail else "")
+                + ". To select a unique annotation specify a more precise name and detail, or"
+                + " provide a bbcount."
+            )
+        self.udb.time.goto(results[0].bbcount)
 
     @report
     @chain_of_thought
