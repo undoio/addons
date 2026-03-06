@@ -132,6 +132,7 @@ class ClaudeAgent(BaseAgent):
                 *self.additional_flags,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=self.agent_subprocess_buffer_limit,
             )
             assert claude.stdout and claude.stderr
 

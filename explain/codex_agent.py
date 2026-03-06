@@ -107,6 +107,7 @@ class CodexAgent(BaseAgent):
                 *self.additional_flags,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=self.agent_subprocess_buffer_limit,
             )
             assert codex.stdout and codex.stderr
 
