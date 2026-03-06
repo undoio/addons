@@ -20,6 +20,7 @@ class BaseAgent(ABC):
     agent_bin: Path
     log_level: str = "CRITICAL"
     additional_flags: list[str] = field(default_factory=list)
+    agent_subprocess_buffer_limit = 1024 * 1024
 
     name: ClassVar[str]
     program_name: ClassVar[str]

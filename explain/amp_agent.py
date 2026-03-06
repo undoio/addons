@@ -130,6 +130,7 @@ class AmpAgent(BaseAgent):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=self.agent_subprocess_buffer_limit,
             )
             assert amp.stdin and amp.stdout and amp.stderr
 
