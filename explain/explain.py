@@ -10,6 +10,7 @@ Provides the commands:
 """
 
 import asyncio
+import bisect
 import contextlib
 import functools
 import inspect
@@ -823,17 +824,12 @@ class UdbMcpGateway:
         Navigate to the point in recorded history marked by the specified annotation.
 
         Both `name` and `detail` must together identify a unique annotation. If multiple
-        annotations match, you should instead specify a bbcount time belonging to the required
+        annotations match, you should also specify a bbcount time belonging to the required
         annotation.
 
         Use `annotations_list` first to discover available annotations and their exact names,
         details and bbcount.
         """
-
-        if bbcount is not None:
-            self.udb.time.goto(bbcount)
-            return
-
         # Prior to UDB 9.2, `annotations.get()` required `name` to be `str` instead of `str | None`.
         # For backwards compatibility, we convert name from None to "" here, which means do not
         # filter by name. This also works with 9.2+.
@@ -845,6 +841,18 @@ class UdbMcpGateway:
                 + (f", detail={detail!r}" if detail else "")
                 + ". Use annotations_list to see available annotations."
             )
+
+        if bbcount is not None:
+            idx = bisect.bisect_left(results, bbcount, key=lambda r: r.bbcount)
+            if idx < len(results) and results[idx].bbcount == bbcount:
+                self.udb.time.goto(bbcount)
+                return
+            raise Exception(
+                f"No annotation found with name={name_str!r}"
+                + (f", detail={detail!r}" if detail else "")
+                + f", and bbcount={bbcount}."
+            )
+
         if len(results) != 1:
             raise Exception(
                 f"Multiple annotations match name={name_str!r}"
