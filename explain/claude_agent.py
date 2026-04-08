@@ -26,6 +26,7 @@ class ClaudeAgent(BaseAgent):
     name: ClassVar[str] = "claude"
     program_name: ClassVar[str] = "claude"
     display_name: ClassVar[str] = "Claude Code"
+    usage_name: ClassVar[str] = "claude-code"
 
     @classmethod
     def find_binary(cls) -> Path | None:

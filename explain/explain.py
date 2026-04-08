@@ -81,6 +81,24 @@ event_loop = None
 agent: BaseAgent | None = None
 """Agent instance for the current session."""
 
+_ai_usage_tracked_in_keyserver = False
+
+
+def _track_ai_usage(udb: udb_base.Udb, usage_name: str) -> None:
+    """
+    Track AI Gen 1 usage in telemetry and keyserver.
+
+    Errors are silently ignored so that tracking failures never prevents the command from running.
+    """
+    with contextlib.suppress(Exception):
+        udb.telemetry_session.data.licensing.used_licensable_features.ai_gen1 = True
+
+    global _ai_usage_tracked_in_keyserver
+    with contextlib.suppress(Exception):
+        _ai_usage_tracked_in_keyserver = udb.keyclient_communicator.log_session_meta(
+            "ai_gen1", usage_name
+        )
+
 
 @contextlib.contextmanager
 def temporary_gdb_settings(udb: udb_base.Udb) -> Iterator[None]:
@@ -971,6 +989,7 @@ def uexperimental__mcp__serve(udb: udb_base.Udb, args: Any) -> None:
     """
     Start an MCP server for this UDB instance.
     """
+    _track_ai_usage(udb, "mcp-serve")  # We don't know the agent name when used as an MCP server.
     gateway = UdbMcpGateway(udb)
     with temporary_gdb_settings(udb):
         run_server(gateway, args.port)
@@ -1051,6 +1070,8 @@ def explain(udb: udb_base.Udb, args: Any) -> None:
     global event_loop
     if not event_loop:
         event_loop = asyncio.new_event_loop()
+
+    _track_ai_usage(udb, agent.usage_name or agent.name)
 
     # Don't allow debuggee standard streams or user breakpoints, they will confuse the LLM.
     with temporary_gdb_settings(udb):
