@@ -28,6 +28,7 @@ class CopilotCLIAgent(BaseAgent):
     name: ClassVar[str] = "copilot"
     program_name: ClassVar[str] = "copilot"
     display_name: ClassVar[str] = "Copilot CLI"
+    usage_name: ClassVar[str] = "github-copilot-cli"
 
     async def _handle_messages(self, stdout: asyncio.StreamReader) -> str:
         """

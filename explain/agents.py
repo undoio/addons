@@ -25,6 +25,9 @@ class BaseAgent(ABC):
     name: ClassVar[str]
     program_name: ClassVar[str]
     display_name: ClassVar[str]
+    # Name reported to the keyserver for usage tracking. Override in subclasses if the
+    # agent name doesn't match the `SupportedAgent` enum in UDB.
+    usage_name: ClassVar[str | None] = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
