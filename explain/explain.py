@@ -1021,6 +1021,7 @@ async def explain_query(agent: BaseAgent, gateway: UdbMcpGateway, why: str) -> s
         ),
         allow_remainders=True,
     ),
+    aliases="ai",
 )
 def explain(udb: udb_base.Udb, args: Any) -> None:
     """
