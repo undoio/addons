@@ -121,6 +121,7 @@ class ClaudeAgent(BaseAgent):
                 "opus",
                 "--mcp-config",
                 mcp_config_path,
+                "--strict-mcp-config",
                 "--allowedTools",
                 allowed_tools,
                 "--output-format",
